@@ -10,3 +10,6 @@ set(BUILD_LRU_CACHE_TESTS ON CACHE BOOL "Build lru_cache tests")
 if(BUILD_LRU_CACHE_TESTS)
   add_subdirectory(tests)
 endif()
+
+add_executable(concurrent_lru_cache app.cpp)
+target_link_libraries(concurrent_lru_cache lru_cache)

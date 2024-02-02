@@ -27,6 +27,15 @@ TEST_F(LruCacheDefaultTest, emplace) {
   ASSERT_EQ(*cache.at(-1), "hello");
 }
 
+/**
+ * Test case for filling the LRU cache.
+ *
+ * @param None
+ *
+ * @return None
+ *
+ * @throws std::exception if cache.at(-1) is called
+ */
 TEST_F(LruCacheDefaultTest, fill) {
   cache.emplace(-1, "hello");
   fill(0);

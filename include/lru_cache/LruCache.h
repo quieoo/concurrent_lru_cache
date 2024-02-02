@@ -26,6 +26,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
+#include <functional>
 
 namespace lru_cache {
 
@@ -42,16 +43,22 @@ template <typename Key, typename Value,
               decltype(detail::Defaults<Key, Value>::initialize)>
 class LruCache {
   using HandleBase = std::shared_ptr<Value>;
+  using Value_Function=std::function<void(Key, std::shared_ptr<Value>)>;
 
 public:
+  
   explicit LruCache(size_t max_unused,
                     const InitFunctor &init_function =
                         detail::Defaults<Key, Value>::initialize)
       : max_unused{max_unused}, init_function{init_function} {}
+  
+  // LruCache(size_t max_unused,
+  //                   const InitFunctor &init_function =
+  //                       detail::Defaults<Key, Value>::initialize)
+  //     : max_unused{max_unused}, init_function{init_function} {}
 
-  LruCache(size_t max_unused, InitFunctor &&init_function)
-      : max_unused{max_unused}, init_function{
-                                    std::forward<InitFunctor>(init_function)} {}
+  LruCache(size_t max_unused, Value_Function ef, const InitFunctor &init_function = detail::Defaults<Key, Value>::initialize)
+      : max_unused{max_unused}, evict_function(ef), init_function{init_function} {}
 
   class Handle : public HandleBase {
   public:
@@ -72,6 +79,17 @@ public:
     Key key;
   };
 
+  /**
+   * Inserts a new element into the container if a matching key does not exist.
+   *
+   * @param key The key of the element to insert.
+   * @param args The arguments to forward to the constructor of the value type.
+   *
+   * @return A pair consisting of a handle to the inserted element and a bool
+   * indicating whether the insertion took place.
+   *
+   * @throws None
+   */
   template <typename... Args>
   std::pair<Handle, bool> emplace(const Key &key, Args &&... args) {
     HandleBase result;
@@ -87,11 +105,29 @@ public:
     return {Handle{*this, key, result}, inserted};
   }
 
+  /**
+   * Retrieves the value associated with the given key.
+   *
+   * @param key the key to look up
+   *
+   * @return a handle to the value associated with the key
+   *
+   * @throws N/A
+   */
   Handle at(const Key &key) {
     std::shared_lock lock{map_mutex};
     return Handle{*this, key, map.at(key)};
   }
 
+  /**
+   * Check if the map contains the specified key.
+   *
+   * @param key the key to check for
+   *
+   * @return true if the map contains the key, false otherwise
+   *
+   * @throws None
+   */
   bool contains(const Key &key) const {
     std::shared_lock lock{map_mutex};
     return map.count(key);
@@ -142,6 +178,15 @@ public:
 private:
   friend Handle;
 
+  /**
+   * Use the provided key, remove it from the unused list, and update the log.
+   *
+   * @param key the key to be used
+   *
+   * @return void
+   *
+   * @throws N/A
+   */
   void use(const Key &key) {
     {
       std::scoped_lock lock{list_mutex};
@@ -159,6 +204,15 @@ private:
     log << "Using " << key << ". " << unused_size << " unused elements.\n";
   }
 
+  /**
+   * A function to mark a key as unused and perform cleanup if necessary.
+   *
+   * @param key the key to be marked as unused
+   *
+   * @return void
+   *
+   * @throws None
+   */
   void unuse(const Key &key) {
     {
       std::scoped_lock lock{list_mutex};
@@ -170,6 +224,10 @@ private:
       cleanup();
   }
 
+  /**
+   * Cleans up the resources by erasing an unused element and its corresponding
+   * entry in the map.
+   */
   void cleanup() {
     auto key = [this]() {
       std::scoped_lock lock{list_mutex};
@@ -177,6 +235,9 @@ private:
       unused.pop_front();
       return lru;
     }();
+    if(evict_function){
+      evict_function(key, map[key]);
+    }
     log << "Erasing " << key << ". " << unused_size - 1
         << " unused elements.\n";
     unused_size--;
@@ -194,6 +255,8 @@ private:
   const size_t max_unused = 10;
 
   InitFunctor init_function;
+  Value_Function evict_function;
+
 };
 
 } // namespace lru_cache

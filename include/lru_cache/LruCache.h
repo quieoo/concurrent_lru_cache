@@ -47,10 +47,8 @@ class LruCache {
 
 public:
   
-  explicit LruCache(size_t max_unused,
-                    const InitFunctor &init_function =
-                        detail::Defaults<Key, Value>::initialize)
-      : max_unused{max_unused}, init_function{init_function} {}
+
+  LruCache(size_t max_unused, const InitFunctor &init_function = detail::Defaults<Key, Value>::initialize) : max_unused{max_unused}, init_function{init_function} {}
   
   // LruCache(size_t max_unused,
   //                   const InitFunctor &init_function =
@@ -59,6 +57,13 @@ public:
 
   LruCache(size_t max_unused, Value_Function ef, const InitFunctor &init_function = detail::Defaults<Key, Value>::initialize)
       : max_unused{max_unused}, evict_function(ef), init_function{init_function} {}
+
+  LruCache& operator=(const LruCache &other){
+    max_unused=other.max_unused;
+    // init_function=other.init_function;
+    evict_function=other.evict_function;
+    return *this;
+  }
 
   class Handle : public HandleBase {
   public:
@@ -252,7 +257,7 @@ private:
       unused.before_begin();
   std::atomic<size_t> unused_size{0};
   std::mutex list_mutex;
-  const size_t max_unused = 10;
+  size_t max_unused = 10;
 
   InitFunctor init_function;
   Value_Function evict_function;

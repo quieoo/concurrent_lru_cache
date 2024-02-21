@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(lru_cache LANGUAGES CXX)
+project(lruhash)
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 11)
+include_directories(include)
+
 
 add_library(lru_cache INTERFACE)
 target_include_directories(lru_cache INTERFACE include/)
@@ -10,6 +14,7 @@ set(BUILD_LRU_CACHE_TESTS ON CACHE BOOL "Build lru_cache tests")
 if(BUILD_LRU_CACHE_TESTS)
   add_subdirectory(tests)
 endif()
+
 
 add_executable(concurrent_lru_cache app.cpp)
 target_link_libraries(concurrent_lru_cache lru_cache)

@@ -1,8 +1,11 @@
 #include <iostream>
 #include <unordered_map>
 #include <fstream>
+#include <vector>
 
-#include "include/lru_cache/LruCache.h"
+#include "lru_cache/LruCache.h"
+#include "lruhash.hpp"
+
 using namespace lru_cache;
 
 void simple_cache_test() {
@@ -71,6 +74,7 @@ void simple_map_test(){
 }
 
 void lru_recall_test(){
+    
     LruCache<int, std::unordered_map<int,int>> cache2(2, [](int key,std::shared_ptr<std::unordered_map<int, int>> evit){
         std::cout<<"evict table: "<<key<<std::endl;
         // 遍历并打印evit
@@ -101,7 +105,32 @@ void lru_recall_test(){
     *cache2[4] = map5;
 }
 
+void lruhash_test(){
+
+    int ht_len=8;
+    int ht_size=1<<(sizeof(uint32_t)*8-ht_len);
+    int cache_size=ht_size*2; // 2 hash table allowd in cache
+    LruHash<uint32_t, uint64_t> lruhash(cache_size, ht_len);
+
+    std::vector<uint32_t> keys = {0x12345678, 0x22345678, 0x32345678, 0x42345678, 0x52345678, 0x62345678, 0x72345678, 0x82345678, 0x92345678, 0xa2345678, 0xb2345678, 0xc2345678, 0xd2345678, 0xe2345678, 0xf2345678};
+    std::vector<uint64_t> values = {0x12345678, 0x22345678, 0x32345678, 0x42345678, 0x52345678, 0x62345678, 0x72345678, 0x82345678, 0x92345678, 0xa2345678, 0xb2345678, 0xc2345678, 0xd2345678, 0xe2345678, 0xf2345678};
+
+    lruhash.BulkLoad(&keys[0], &values[0], keys.size());
+
+    for(int i=0;i<keys.size();++i){
+        uint64_t ret;
+        if(lruhash.GetPA(keys[i], &ret)){
+            printf("get %x %lx\n", keys[i], ret);
+        }
+        lruhash.GetPA(keys[i], &ret);
+    }
+
+    printf("total access: %d, hit: %d\n", lruhash.total_access, lruhash.hits);
+}
+
+
 int main() {
-    lru_recall_test();
+    // lru_recall_test();
+    lruhash_test();
     return 0;
 }

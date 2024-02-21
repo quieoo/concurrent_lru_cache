@@ -16,11 +16,11 @@ set_target_properties(lru_cache PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_17
 #   add_subdirectory(tests)
 # endif()
 
-add_library(lib_lruhash SHARED src/lruhash.cc)
-target_link_libraries(lib_lruhash lru_cache pthread)
+add_library(clruhash STATIC src/lruhash.cc)
+target_link_libraries(clruhash lru_cache pthread)
 
 add_executable(main src/main.c)
-target_link_libraries(main lib_lruhash)
+target_link_libraries(main clruhash)
 
 # add_executable(concurrent_lru_cache app.cpp)
 # target_link_libraries(concurrent_lru_cache lru_cache)

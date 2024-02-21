@@ -1,9 +1,19 @@
+#pragma once
+
 #include <iostream>
 #include <unordered_map>
 #include <fstream>
 #include <string>
 #include <vector>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sstream>
+
 #include "lru_cache/LruCache.h"
 
 template <typename LA, typename PA>
@@ -45,7 +55,7 @@ public:
         }
         else
         {
-            printf("LruHash: allocted cache_size(%f MB) is enough for %d hash tables(%f MB)\n", (float)cache_size_ / (1024 * 1024), allowed_ht_num, (float)lrucache_size / (1024 * 1024));
+            printf("LruHash: allocted cache_size(%f MB) \nNumber of Cached Hash Table: %d(%f MB for each)\n", (float)cache_size_ / (1024 * 1024), allowed_ht_num, (float)lrucache_size / (1024 * 1024));
 
             cht = lru_cache::LruCache<uint32_t, std::unordered_map<LA, PA>>(allowed_ht_num, [](uint32_t ht_id, std::shared_ptr<std::unordered_map<LA, PA>> evit){
                 // store evit hash table to a file named by ha
@@ -56,7 +66,7 @@ public:
                     outFile << pair.first << " " << pair.second << "\n";
                 }
                 outFile.close();
-                // printf("evict hash table %x\n", ht_id);
+                printf("evict hash table %x\n", ht_id);
                 });
         }
     }
@@ -68,30 +78,32 @@ public:
         // Traverse all files under "./hash_tables/" directory
         DIR* dir=opendir("./hash_tables");
         if(dir==NULL){
-            std::cout<<"Open directory error!"<<std::endl;
-            return;
-        }
-
-        dirent* entry;
-        while((entry=readdir(dir))!=NULL){
-            if(entry->d_type==DT_REG){
-                int ht_id = std::stoi(entry->d_name);
-                std::string filename = "./hash_tables/" + std::to_string(ht_id);
-                std::ifstream inFile(filename);
-                if (inFile){
-                    std::unordered_map<LA, PA> restoredMap;
-                    LA k;
-                    PA v;
-                    while (inFile >> k >> v){
-                        restoredMap[k] = v;
+            std::cout<<"Local Hash Tables not exist"<<std::endl;
+            mkdir("./hash_tables", 0777);
+        }else{
+            dirent* entry;
+            while((entry=readdir(dir))!=NULL){
+                if(entry->d_type==DT_REG){
+                    int ht_id = std::stoi(entry->d_name);
+                    std::string filename = "./hash_tables/" + std::to_string(ht_id);
+                    std::ifstream inFile(filename);
+                    if (inFile){
+                        std::unordered_map<LA, PA> restoredMap;
+                        LA k;
+                        PA v;
+                        std::string line;
+                        while(std::getline(inFile, line)){
+                            std::istringstream iss(line);
+                            iss >> k >> v;
+                            restoredMap[k] = v;
+                        }
+                        inFile.close();
+                        map[ht_id] = restoredMap;
                     }
-                    inFile.close();
-                    map[ht_id] = restoredMap;
                 }
             }
+            closedir(dir);
         }
-        closedir(dir);
-
         std::cout<<"Existsing hash tables: "<<map.size()<<std::endl;
 
         // Insert new kvs
@@ -145,8 +157,12 @@ public:
                 std::unordered_map<LA, PA> restoredMap;
                 LA k;
                 PA v;
-                while (inFile >> k >> v){
+                std::string line;
+                while(std::getline(inFile, line)){
+                    std::istringstream iss(line);
+                    iss >> k >> v;
                     restoredMap[k] = v;
+                    // std::cout<<"load: "<<k<<" "<<v<<std::endl;
                 }
                 inFile.close();
                 if (restoredMap.count(key)<=0){

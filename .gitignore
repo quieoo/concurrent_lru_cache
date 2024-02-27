@@ -29,10 +29,12 @@ cmake-build-*/
 # Compiled Static libraries
 *.lai
 *.la
-*.a
+# *.a
 *.lib
 
 # Executables
 *.exe
 *.out
 *.app
+
+external/quick_cache_rust/target/

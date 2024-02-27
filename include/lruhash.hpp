@@ -44,18 +44,15 @@ public:
     LruHash(int cache_size_, int ht_len_){
         total_access=0;
         hits=0;
-
-        cache_size = cache_size_;
-        ht_len = ht_len_;
-        int lrucache_size = 1 << (sizeof(LA) * 8 - ht_len);
-        int allowed_ht_num = cache_size < lrucache_size ? 0 : (cache_size / lrucache_size);
+        ht_len=ht_len_;
+        allowed_ht_num = cache_size_;
         if (allowed_ht_num < 1)
         {
-            printf("warning: allocted cache_size(%f MB) is not enough for even one hash table(%f MB)\n", (float)cache_size_ / (1024 * 1024), (float)lrucache_size / (1024 * 1024));
+            printf("warning: allocted cache number %d\n", allowed_ht_num);
         }
         else
         {
-            printf("LruHash: allocted cache_size(%f MB) \nNumber of Cached Hash Table: %d(%f MB for each)\n", (float)cache_size_ / (1024 * 1024), allowed_ht_num, (float)lrucache_size / (1024 * 1024));
+            printf("allow cache number %d\n", allowed_ht_num);
 
             cht = lru_cache::LruCache<uint32_t, std::unordered_map<LA, PA>>(allowed_ht_num, [](uint32_t ht_id, std::shared_ptr<std::unordered_map<LA, PA>> evit){
                 // store evit hash table to a file named by ha
@@ -81,28 +78,28 @@ public:
             std::cout<<"Local Hash Tables not exist"<<std::endl;
             mkdir("./hash_tables", 0777);
         }else{
-            dirent* entry;
-            while((entry=readdir(dir))!=NULL){
-                if(entry->d_type==DT_REG){
-                    int ht_id = std::stoi(entry->d_name);
-                    std::string filename = "./hash_tables/" + std::to_string(ht_id);
-                    std::ifstream inFile(filename);
-                    if (inFile){
-                        std::unordered_map<LA, PA> restoredMap;
-                        LA k;
-                        PA v;
-                        std::string line;
-                        while(std::getline(inFile, line)){
-                            std::istringstream iss(line);
-                            iss >> k >> v;
-                            restoredMap[k] = v;
-                        }
-                        inFile.close();
-                        map[ht_id] = restoredMap;
-                    }
-                }
-            }
-            closedir(dir);
+            // dirent* entry;
+            // while((entry=readdir(dir))!=NULL){
+            //     if(entry->d_type==DT_REG){
+            //         int ht_id = std::stoi(entry->d_name);
+            //         std::string filename = "./hash_tables/" + std::to_string(ht_id);
+            //         std::ifstream inFile(filename);
+            //         if (inFile){
+            //             std::unordered_map<LA, PA> restoredMap;
+            //             LA k;
+            //             PA v;
+            //             std::string line;
+            //             while(std::getline(inFile, line)){
+            //                 std::istringstream iss(line);
+            //                 iss >> k >> v;
+            //                 restoredMap[k] = v;
+            //             }
+            //             inFile.close();
+            //             map[ht_id] = restoredMap;
+            //         }
+            //     }
+            // }
+            // closedir(dir);
         }
         std::cout<<"Existsing hash tables: "<<map.size()<<std::endl;
 
@@ -141,6 +138,7 @@ public:
         total_access++;
         // Hit in LruCache
         int ht_id = get_ht_id(key);
+        
         if (cht.contains(ht_id)){
             hits++;
             if ((*cht[ht_id]).count(key)<=0){

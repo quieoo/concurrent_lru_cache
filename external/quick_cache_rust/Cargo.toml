@@ -1,0 +1,13 @@
+[package]
+name = "rust_c_integration"
+version = "0.1.0"
+edition="2018"
+
+[lib]
+name = "rust_c_integration"
+crate-type = ["staticlib"]
+
+[dependencies]
+cacache = { version = "13.0.0", default-features = false, features = ["mmap"] }
+moka = { version = "0.12.5", features = ["sync"] }
+quick_cache = "0.4.1"

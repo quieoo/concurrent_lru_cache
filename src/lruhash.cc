@@ -6,13 +6,13 @@ extern "C" {
 #endif
 #include <iostream>
 
-std::ostream& operator<<(std::ostream& os, const PhysicalAddr& pa){
+std::ostream& operator<<(std::ostream& os, const PhysicalAddress& pa){
     for(int i=0;i<20;++i){
         os << (int)pa.data[i]<<" ";
     }
     return os;
 }
-std::istream& operator>>(std::istream& is, PhysicalAddr& pa){
+std::istream& operator>>(std::istream& is, PhysicalAddress& pa){
     std::string temp;
     for(int i=0;i<20;++i){
         is >> temp;
@@ -21,17 +21,17 @@ std::istream& operator>>(std::istream& is, PhysicalAddr& pa){
     return is;
 }
 
-typedef LruHash<LA, PhysicalAddr> LruHash_FTL;
+typedef LruHash<LA, PhysicalAddress> LruHash_FTL;
 
 void* build_lru_hash(int cache_size, int ht_len){
     LruHash_FTL *ftl=new LruHash_FTL(cache_size, ht_len);
     return ftl;
 }
-void bulk_load(void* ptr, LA* las, PhysicalAddr* pas, int num){
+void bulk_load(void* ptr, LA* las, PhysicalAddress* pas, int num){
     LruHash_FTL* ftl=(LruHash_FTL*)ptr;
     ftl->BulkLoad(las, pas, num);
 }
-int get_pa(void* ptr, LA la, PhysicalAddr* pa){
+int get_pa(void* ptr, LA la, PhysicalAddress* pa){
     LruHash_FTL* ftl=(LruHash_FTL*)ptr;
     return ftl->GetPA(la, pa);
 }

@@ -58,6 +58,7 @@
         "thread": "cpp",
         "typeinfo": "cpp",
         "codecvt": "cpp",
-        "lruhash.h": "c"
+        "lruhash.h": "c",
+        "time.h": "c"
     }
 }

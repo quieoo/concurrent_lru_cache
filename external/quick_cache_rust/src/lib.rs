@@ -77,7 +77,6 @@ pub extern "C" fn test_cacache() {
 }
 
 use quick_cache::unsync::Cache;
-use std::ptr;
 
 #[no_mangle]
 pub extern "C" fn test_quick_cache() {
@@ -133,18 +132,25 @@ pub extern "C" fn quick_cache_query(cache_ptr: *mut std::ffi::c_void, key: u64) 
     result
 }
 
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct R_PhysicalAddr{
+    pub data: [u8;20],
+}
+
 #[no_mangle]
 //create a cache and return as a void pointer in C
 pub extern "C" fn build_quick_table_cache(entry_num: u64)->*mut std::ffi::c_void {
     //创建cache，指定key和Value的类型为u64
-    let cache_box = Box::new(Cache::<u64, Vec<u64>>::new(entry_num as usize));
+    let cache_box = Box::new(Cache::<u64, Vec<R_PhysicalAddr>>::new(entry_num as usize));
     // mem::forget(cache_box); // Prevents the destructor of Cache from being called
     let raw_ptr = Box::into_raw(cache_box) as *mut std::ffi::c_void;
     raw_ptr
 }
 
 #[no_mangle]
-pub extern "C" fn quick_table_cache_insert(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_data: *mut u64, table_len: u64) {
+pub extern "C" fn quick_table_cache_insert(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_data: *mut R_PhysicalAddr, table_len: u64) {
     
     //create a Vec with table_data
     let value = unsafe {
@@ -152,25 +158,32 @@ pub extern "C" fn quick_table_cache_insert(cache_ptr: *mut std::ffi::c_void, tab
     };
 
     // restore cache
-    let mut cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<u64>>) };
+    let mut cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<R_PhysicalAddr>>) };
     //insert table into cache
     cache.insert(table_id, value);
     mem::forget(cache);
 }
 
 #[no_mangle]
-pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64) -> u64 {
-    let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<u64>>) };
+pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64, result: *mut R_PhysicalAddr) {
+    let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<R_PhysicalAddr>>) };
 
-    let ret=cache.get(&table_id);
-    // mem::forget(cache);
-    let result= if ret.is_none() {
-        // u64 max
-        0xffffffffffffffff
-    }else{
+    let ret = cache.get(&table_id);
+    let result_struct: R_PhysicalAddr;
+
+    if ret.is_none() {
+        // return a R_PhysicalAddr with all 0xff
+        result_struct = R_PhysicalAddr { data: [0xff; 20] };
+    } else {
         // get element at table_offset
-        ret.unwrap()[table_offset as usize]
-    };
+        result_struct = ret.unwrap()[table_offset as usize].clone();
+    }
+
+    // Copy the result_struct to the provided memory location
+    unsafe {
+        std::ptr::copy_nonoverlapping(&result_struct, result, 1);
+    }
+
+    // Leak the cache to avoid deallocating it
     Box::leak(cache);
-    result
 }

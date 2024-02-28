@@ -124,10 +124,10 @@ void get_status(){
 
 
 extern void* build_quick_table_cache(uint64_t entry_num);
-extern void quick_table_cache_insert(void* cache, uint64_t table_id, uint64_t* table_data, uint64_t table_len);
-extern uint64_t quick_table_cache_get(void* cache, uint64_t table_id, uint64_t table_offset);
+extern void quick_table_cache_insert(void* cache, uint64_t table_id, RC_PhysicalAddr* table_data, uint64_t table_len);
+extern void quick_table_cache_get(void* cache, uint64_t table_id, uint64_t table_offset, RC_PhysicalAddr* ret);
 
-void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas, uint64_t* pas, uint64_t key_num){
+void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas, RC_PhysicalAddr* pas, uint64_t key_num){
     rustqc_dtable* dtable=(rustqc_dtable*)malloc(sizeof(rustqc_dtable));
     dtable->quick_cache=build_quick_table_cache(max_cache_entry);
     dtable->directory_suffix=ht_len;
@@ -136,14 +136,15 @@ void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas,
     uint64_t l=0;
     uint64_t r;
     char file_name[50];
+    int table_num=0;
     while(l<key_num){
         uint64_t table_id=lvas[l]>>ht_len;
         r=l+1;
         while(r<key_num && (lvas[r]>>ht_len)==table_id){
             r++;
         }
-        printf("table-%lu, key number: %lu\n", table_id, r-l);
-        uint64_t* table_data=(uint64_t*)malloc(sizeof(uint64_t)*table_data_len);
+        // printf("table-%lu, key number: %lu\n", table_id, r-l);
+        RC_PhysicalAddr* table_data=(RC_PhysicalAddr*)malloc(sizeof(RC_PhysicalAddr)*table_data_len);
         for(uint64_t i=l;i<r;i++){
             uint64_t table_offset=lvas[i]%table_data_len;
             table_data[table_offset]=pas[i];
@@ -154,32 +155,43 @@ void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas,
         sprintf(file_name, "tables/tbl_%lu", table_id);
         FILE* fp = fopen(file_name, "w");
         if(fp!=NULL){
-            fwrite(table_data, sizeof(uint64_t), table_data_len, fp);
+            fwrite(table_data, sizeof(RC_PhysicalAddr), table_data_len, fp);
             fclose(fp);
         }else{
             printf("fopen error\n");
             return NULL;
         }
         quick_table_cache_insert(dtable->quick_cache, table_id, table_data, table_data_len);
+        table_num++;
         l=r;
     }
-
+    printf("table number: %d\n", table_num);
     return dtable;
 }
-int rustqc_dtable_get_pa(void* index, uint64_t lva, uint64_t* pa){
+
+int pa_not_found(RC_PhysicalAddr pa){
+    // if all bytes in pa are 0xff, return 1
+    for(int i=0;i<20;i++){
+        if(pa.data[i]!=0xff) return 0;
+    }
+    return 1;
+}
+
+int rustqc_dtable_get_pa(void* index, uint64_t lva, RC_PhysicalAddr* pa){
     rustqc_dtable* dtable=(rustqc_dtable*)index;
     uint64_t table_id=lva>>(dtable->directory_suffix);
     uint64_t table_offset=lva%(1<<(dtable->directory_suffix));
-    uint64_t ret=quick_table_cache_get(dtable->quick_cache, table_id, table_offset);
-    if(ret==0xffffffffffffffff){
+    RC_PhysicalAddr ret;
+    quick_table_cache_get(dtable->quick_cache, table_id, table_offset,&ret);
+    if(pa_not_found(ret)){
         cache_miss++;
         char file_name[50];
         sprintf(file_name, "tables/tbl_%lu", table_id);
         FILE* fp = fopen(file_name, "r");
         if(fp!=NULL){
             uint64_t table_data_len=1<<(dtable->directory_suffix);
-            uint64_t* table_data=(uint64_t*)malloc(sizeof(uint64_t)*table_data_len);
-            fread(table_data, sizeof(uint64_t), table_data_len, fp);
+            RC_PhysicalAddr* table_data=(RC_PhysicalAddr*)malloc(sizeof(RC_PhysicalAddr)*table_data_len);
+            fread(table_data, sizeof(RC_PhysicalAddr), table_data_len, fp);
             fclose(fp);
             *pa=table_data[table_offset];
             quick_table_cache_insert(dtable->quick_cache, table_id, table_data, table_data_len);
@@ -192,4 +204,24 @@ int rustqc_dtable_get_pa(void* index, uint64_t lva, uint64_t* pa){
     cache_hit++;
     *pa=ret;
     return 0;
+}
+
+
+void test_rustqc(){
+    rustqc_dtable* dtable=build_quick_table_cache(10);
+    uint64_t lva=1;
+    RC_PhysicalAddr* pas=(RC_PhysicalAddr*)malloc(sizeof(RC_PhysicalAddr)*10);
+    for(int i=0;i<10;i++){
+        pas[i].data[0]=i;
+    }
+
+    quick_table_cache_insert(dtable, lva, pas, 10);
+
+    RC_PhysicalAddr pa;
+    for(int i=0;i<10;i++){
+        quick_table_cache_get(dtable, lva, i, &pa);
+        printf("pa: %u\n", pa.data[0]);
+    }
+    free(pas);
+    free(dtable);
 }

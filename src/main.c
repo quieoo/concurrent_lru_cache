@@ -302,6 +302,25 @@ void test_file_wr(){
     }
 }
 
+RC_PhysicalAddr get_pa_from_u64(uint64_t val){
+    RC_PhysicalAddr ret;
+    // set the first 8 bytes of ret to val
+    // from high-effective byte to low-effective byte
+    for(int i=7;i>=0;i--){
+        ret.data[7-i]=val>>i*8;
+    }
+    return ret;
+}
+uint64_t get_u64_from_pa(RC_PhysicalAddr pa){
+    uint64_t ret=0;
+    for(int i=0;i<8;i++){
+        ret<<=8;
+        ret+=pa.data[i];
+    }
+    return ret;
+}
+
+
 void test_rustqu_dtable(char* trace_file){
     uint64_t* lpn;
     uint64_t num=0;
@@ -329,12 +348,13 @@ void test_rustqu_dtable(char* trace_file){
     // for(int i=0;i<num;i++){
     //     printf("lpn: %lu\n", lpn[i]);
     // }
-    uint64_t* ppn=(uint64_t*)malloc(key_num*sizeof(uint64_t));
+    RC_PhysicalAddr* ppn=(RC_PhysicalAddr*)malloc(key_num*sizeof(RC_PhysicalAddr));
     for(uint64_t i=0;i<key_num;i++){
-        ppn[i]=lpn2[i]%4096;
+        // set ppn to lpn, byte by byte
+        ppn[i]=get_pa_from_u64(lpn2[i]);
     }
     int ht_len=20;
-    // allowed_cache_table=2160*1024*1024/20/(1<<20);
+    // allowed_cache_table=2160*1024*1024/(1<<20 * sizeof(RC_PhysicalAddr))
     int allowd_cache_table=108;
     printf("key_num: %lu, ht_len: %d, allowed_cache_table: %d\n", key_num, ht_len, allowd_cache_table);
     rustqc_dtable* index=rustqc_dtable_build_index(allowd_cache_table, ht_len, lpn2, ppn, key_num);
@@ -343,14 +363,14 @@ void test_rustqu_dtable(char* trace_file){
         return;
     }
     u64 s=get_nanotime();
-    uint64_t pa;
+    RC_PhysicalAddr pa;
     for(uint64_t i=0;i<num;i++){
         if(rustqc_dtable_get_pa(index, origin_lpn[i], &pa)){
             printf("rustqc_get_pa error\n");
             break;
         }
-        if(pa!=origin_lpn[i]%4096){
-            printf("error. key: %lu, expected: %lu, actual: %lu\n",origin_lpn[i], origin_lpn[i]%4096, pa);
+        if(get_u64_from_pa(pa)!=origin_lpn[i]){
+            printf("error. key: %lu, expected: %lx, actual: %lx\n",origin_lpn[i], origin_lpn[i], get_u64_from_pa(pa));
             break;
         }
     }
@@ -362,9 +382,6 @@ void test_rustqu_dtable(char* trace_file){
 }
 
 int main(int argc, char** argv){
-    // test_file_wr();
-    // return 0;
-
     // // 从参数中获得file
     char* file=argv[1];
     // // trace_test(file);

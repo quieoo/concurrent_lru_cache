@@ -9,5 +9,6 @@ crate-type = ["staticlib"]
 
 [dependencies]
 cacache = { version = "13.0.0", default-features = false, features = ["mmap"] }
+libc = "0.2.153"
 moka = { version = "0.12.5", features = ["sync"] }
 quick_cache = "0.4.1"

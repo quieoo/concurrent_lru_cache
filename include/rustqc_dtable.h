@@ -16,15 +16,20 @@ typedef struct rustqc_dtable {
     int directory_suffix;
 }rustqc_dtable;
 
+typedef struct RC_PhysicalAddr{
+    uint8_t data[20];
+}RC_PhysicalAddr;
+
 // cache ppn
 void* rustqc_build_index(int max_cache_entry, int ht_len, uint64_t* lvas, uint64_t* pas, uint64_t key_num);
 int rustqc_get_pa(void* index, uint64_t lva, uint64_t* pa);
 void get_status();
 
-//  cache ppn table
-void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas, uint64_t* pas, uint64_t key_num);
-int rustqc_dtable_get_pa(void* index, uint64_t lva, uint64_t* pa);
+// cache ppn table
 
+void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas, RC_PhysicalAddr* pas, uint64_t key_num);
+int rustqc_dtable_get_pa(void* index, uint64_t lva, RC_PhysicalAddr* pa);
+void test_rustqc();
 #ifdef __cplusplus
 }
 #endif

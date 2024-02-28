@@ -471,6 +471,7 @@ name = "rust_c_integration"
 version = "0.1.0"
 dependencies = [
  "cacache",
+ "libc",
  "moka",
  "quick_cache",
 ]

@@ -77,6 +77,8 @@ pub extern "C" fn test_cacache() {
 }
 
 use quick_cache::unsync::Cache;
+use std::ptr;
+
 #[no_mangle]
 pub extern "C" fn test_quick_cache() {
     let mut cache = Cache::new(5);
@@ -87,6 +89,16 @@ pub extern "C" fn test_quick_cache() {
     println!("get: {:?}", cache.get(&"square"));
     println!("get: {:?}", cache.get(&"circle"));
 }
+
+#[no_mangle]
+pub extern "C" fn test_quick_cache_table() {
+    // create a cache with Key type as uint64_t and Value type a fixed-size array
+    let mut cache = Cache::<u64, [u8; 8]>::new(5);
+    cache.insert(1, [1, 2, 3, 4, 5, 6, 7, 8]);
+    println!("get: {:?}", cache.get(&1));
+    
+}
+
 
 use std::mem;
 
@@ -116,6 +128,48 @@ pub extern "C" fn quick_cache_query(cache_ptr: *mut std::ffi::c_void, key: u64) 
         0
     }else{
         ret.unwrap().clone()
+    };
+    Box::leak(cache);
+    result
+}
+
+#[no_mangle]
+//create a cache and return as a void pointer in C
+pub extern "C" fn build_quick_table_cache(entry_num: u64)->*mut std::ffi::c_void {
+    //创建cache，指定key和Value的类型为u64
+    let cache_box = Box::new(Cache::<u64, Vec<u64>>::new(entry_num as usize));
+    // mem::forget(cache_box); // Prevents the destructor of Cache from being called
+    let raw_ptr = Box::into_raw(cache_box) as *mut std::ffi::c_void;
+    raw_ptr
+}
+
+#[no_mangle]
+pub extern "C" fn quick_table_cache_insert(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_data: *mut u64, table_len: u64) {
+    
+    //create a Vec with table_data
+    let value = unsafe {
+        Vec::from_raw_parts(table_data, table_len as usize, table_len as usize)
+    };
+
+    // restore cache
+    let mut cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<u64>>) };
+    //insert table into cache
+    cache.insert(table_id, value);
+    mem::forget(cache);
+}
+
+#[no_mangle]
+pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64) -> u64 {
+    let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<u64>>) };
+
+    let ret=cache.get(&table_id);
+    // mem::forget(cache);
+    let result= if ret.is_none() {
+        // u64 max
+        0xffffffffffffffff
+    }else{
+        // get element at table_offset
+        ret.unwrap()[table_offset as usize]
     };
     Box::leak(cache);
     result

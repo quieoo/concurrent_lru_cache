@@ -19,9 +19,11 @@ set_target_properties(lru_cache PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_17
 add_library(clruhash STATIC src/lruhash.cc)
 target_link_libraries(clruhash lru_cache pthread)
 
+add_library(rustqc STATIC src/rustqc_dtable.c)
+target_link_libraries(rustqc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/lib/quick_cache_rust/librust_c_integration.a dl)
 
 add_executable(main src/main.c)
-target_link_libraries(main clruhash ${CMAKE_CURRENT_SOURCE_DIR}/external/lib/quick_cache_rust/librust_c_integration.a -ldl)
+target_link_libraries(main clruhash rustqc)
 
 # add_executable(concurrent_lru_cache app.cpp)
 # target_link_libraries(concurrent_lru_cache lru_cache)

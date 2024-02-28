@@ -14,9 +14,9 @@ typedef struct PhysicalAddress{
 
 
 
-void* build_lru_hash(int cache_size, int ht_len);
-void bulk_load(void* ptr, LA* las, PhysicalAddress* pas, int num);
-int get_pa(void* ptr, LA la, PhysicalAddress* pa);
+void* lru_hash_build(int cache_size, int ht_len);
+void lru_hash_bulk_load(void* ptr, LA* las, PhysicalAddress* pas, int num);
+int lru_hash_get_pa(void* ptr, LA la, PhysicalAddress* pa);
 
 
 #ifdef __cplusplus

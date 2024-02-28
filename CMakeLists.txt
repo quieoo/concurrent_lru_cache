@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 project(lruhash)
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_FLAGS "-fPIE")
 include_directories(include)
 
 

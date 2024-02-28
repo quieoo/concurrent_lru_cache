@@ -1,7 +1,9 @@
+cargo-features = ["profile-rustflags"]
 [package]
 name = "rust_c_integration"
 version = "0.1.0"
 edition="2018"
+
 
 [lib]
 name = "rust_c_integration"
@@ -12,3 +14,11 @@ cacache = { version = "13.0.0", default-features = false, features = ["mmap"] }
 libc = "0.2.153"
 moka = { version = "0.12.5", features = ["sync"] }
 quick_cache = "0.4.1"
+
+[profile.dev]
+# 其他配置...
+rustflags = ["-C", "relocation-model=pic"]  # 设置 relocation-model 为 pic
+
+[profile.release]
+# 其他配置...
+rustflags = ["-C", "relocation-model=pic"]  # 设置 relocation-model 为 pic

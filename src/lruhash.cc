@@ -23,15 +23,15 @@ std::istream& operator>>(std::istream& is, PhysicalAddress& pa){
 
 typedef LruHash<LA, PhysicalAddress> LruHash_FTL;
 
-void* build_lru_hash(int cache_size, int ht_len){
+void* lru_hash_build(int cache_size, int ht_len){
     LruHash_FTL *ftl=new LruHash_FTL(cache_size, ht_len);
     return ftl;
 }
-void bulk_load(void* ptr, LA* las, PhysicalAddress* pas, int num){
+void lru_hash_bulk_load(void* ptr, LA* las, PhysicalAddress* pas, int num){
     LruHash_FTL* ftl=(LruHash_FTL*)ptr;
     ftl->BulkLoad(las, pas, num);
 }
-int get_pa(void* ptr, LA la, PhysicalAddress* pa){
+int lru_hash_get_pa(void* ptr, LA la, PhysicalAddress* pa){
     LruHash_FTL* ftl=(LruHash_FTL*)ptr;
     return ftl->GetPA(la, pa);
 }

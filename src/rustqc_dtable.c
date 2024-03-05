@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <dirent.h>
+
 
 extern void* build_quick_cache(uint64_t entry_num);
 extern void quick_cache_insert(void* cache, uint64_t key, uint64_t value);
@@ -143,7 +145,7 @@ void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas,
         while(r<key_num && (lvas[r]>>ht_len)==table_id){
             r++;
         }
-        // printf("table-%lu, key number: %lu\n", table_id, r-l);
+        printf("table-%lu, key number: %lu\n", table_id, r-l);
         RC_PhysicalAddr* table_data=(RC_PhysicalAddr*)malloc(sizeof(RC_PhysicalAddr)*table_data_len);
         for(uint64_t i=l;i<r;i++){
             uint64_t table_offset=lvas[i]%table_data_len;
@@ -206,6 +208,38 @@ int rustqc_dtable_get_pa(void* index, uint64_t lva, RC_PhysicalAddr* pa){
     return 0;
 }
 
+void deleteFilesInDir(const char *dirname) {
+    DIR *dir;
+    struct dirent *entry;
+    char path[1000];
+
+    dir = opendir(dirname);
+    if (dir == NULL) {
+        perror("Error opening directory");
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+            snprintf(path, sizeof(path), "%s/%s", dirname, entry->d_name);
+            if (entry->d_type == DT_DIR) {
+                deleteFilesInDir(path); // Recursively delete subdirectories
+                rmdir(path); // Remove the subdirectory
+            } else {
+                remove(path); // Delete the file
+            }
+        }
+    }
+
+    closedir(dir);
+}
+
+void rustqc_dtable_clean_local_files(){
+    // delete all files under the "tables" directory
+    char dirname[] = "tables";
+    deleteFilesInDir(dirname);    
+    rmdir(dirname);
+}
 
 void test_rustqc(){
     rustqc_dtable* dtable=build_quick_table_cache(10);

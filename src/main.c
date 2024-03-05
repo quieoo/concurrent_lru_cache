@@ -379,6 +379,8 @@ void test_rustqu_dtable(char* trace_file){
     printf("time: %f us\n", (double)(e-s)/num/1000);
 
     get_status();
+
+    rustqc_dtable_clean_local_files();
 }
 
 int main(int argc, char** argv){

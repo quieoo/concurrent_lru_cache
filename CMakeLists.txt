@@ -24,10 +24,12 @@ add_library(clruhash STATIC src/lruhash.cc)
 target_link_libraries(clruhash lru_cache pthread)
 
 add_library(rustqc STATIC src/rustqc_dtable.c)
+target_compile_options(rustqc PRIVATE -fPIE -pie -fPIC)
 target_link_libraries(rustqc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/lib/quick_cache_rust/librust_c_integration.so dl)
-target_compile_options(rustqc PRIVATE -fPIE)
+
 
 add_executable(main src/main.c)
+target_compile_options(main PRIVATE -fPIE -pie)
 target_link_libraries(main clruhash rustqc)
 
 # add_executable(concurrent_lru_cache app.cpp)

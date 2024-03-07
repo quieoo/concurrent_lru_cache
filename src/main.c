@@ -321,6 +321,31 @@ uint64_t get_u64_from_pa(RC_PhysicalAddr pa){
 }
 
 
+struct thread_arg{
+    void* index;
+    uint64_t* lvas;
+    uint64_t num;
+};
+
+void* dtable_query_routine(void* arg){
+    struct thread_arg* t_arg=(struct thread_arg*)arg;
+    RC_PhysicalAddr pa;
+    u64 s=get_nanotime();
+    for(uint64_t i=0;i<t_arg->num;i++){
+        if(rustqc_dtable_get_pa(t_arg->index, t_arg->lvas[i], &pa)){
+            printf("rustqc_dtable_get_pa error\n");
+            return NULL;
+        }
+        if(get_u64_from_pa(pa)!=t_arg->lvas[i]){
+            printf("error. expected: %lu, actual: %lu\n", t_arg->lvas[i], get_u64_from_pa(pa));
+            return NULL;
+        }
+    }
+    u64 e=get_nanotime();
+    printf("time: %f us\n", (double)(e-s)/t_arg->num/1000);
+    return NULL;
+}
+
 void test_rustqu_dtable(char* trace_file){
     uint64_t* lpn;
     uint64_t num=0;
@@ -362,21 +387,23 @@ void test_rustqu_dtable(char* trace_file){
         printf("rustqc_build_index error\n");
         return;
     }
-    u64 s=get_nanotime();
-    RC_PhysicalAddr pa;
-    for(uint64_t i=0;i<num;i++){
-        if(rustqc_dtable_get_pa(index, origin_lpn[i], &pa)){
-            printf("rustqc_get_pa error\n");
-            break;
-        }
-        if(get_u64_from_pa(pa)!=origin_lpn[i]){
-            printf("error. key: %lu, expected: %lx, actual: %lx\n",origin_lpn[i], origin_lpn[i], get_u64_from_pa(pa));
-            break;
-        }
-    }
     
-    u64 e=get_nanotime();
-    printf("time: %f us\n", (double)(e-s)/num/1000);
+
+    // create multiple threads to call rustqc_dtable_get_pa at the same time
+    struct thread_arg arg;
+    arg.index=index;
+    arg.lvas=origin_lpn;
+    arg.num=num;
+    pthread_t threads[10];
+    for(int i=0;i<10;i++){
+        pthread_create(&threads[i], NULL, dtable_query_routine, &arg);
+    }
+    for(int i=0;i<10;i++){
+        pthread_join(threads[i], NULL);
+    }
+
+
+    
 
     get_status();
 

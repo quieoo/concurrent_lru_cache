@@ -184,8 +184,10 @@ int rustqc_dtable_get_pa(void* index, uint64_t lva, RC_PhysicalAddr* pa){
     uint64_t table_id=lva>>(dtable->directory_suffix);
     uint64_t table_offset=lva%(1<<(dtable->directory_suffix));
     RC_PhysicalAddr ret;
+    
     quick_table_cache_get(dtable->quick_cache, table_id, table_offset,&ret);
     if(pa_not_found(ret)){
+        // printf("table-%lu not found\n", table_id);
         cache_miss++;
         char file_name[50];
         sprintf(file_name, "tables/tbl_%lu", table_id);

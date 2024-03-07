@@ -164,43 +164,20 @@ pub extern "C" fn quick_table_cache_insert(cache_ptr: *mut std::ffi::c_void, tab
     mem::forget(cache);
 }
 
-#[no_mangle]
-pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64, result: *mut R_PhysicalAddr) {
-    let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<R_PhysicalAddr>>) };
-
-    let ret = cache.get(&table_id);
-    let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
-
-    if let Some(table_data) = ret {
-        if let Some(entry) = table_data.get(table_offset as usize) {
-            result_struct = entry.clone();
-        }
-    }
-    // Copy the result_struct to the provided memory location
-    unsafe {
-        std::ptr::copy_nonoverlapping(&result_struct, result, 1);
-    }
-
-    // Leak the cache to avoid deallocating it
-    Box::leak(cache);
-}
+use std::panic;
 
 // #[no_mangle]
 // pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64, result: *mut R_PhysicalAddr) {
-
 //     let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<R_PhysicalAddr>>) };
 
 //     let ret = cache.get(&table_id);
-//     let result_struct: R_PhysicalAddr;
+//     let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
 
-//     if ret.is_none() {
-//         // return a R_PhysicalAddr with all 0xff
-//         result_struct = R_PhysicalAddr { data: [0xff; 20] };
-//     } else {
-//         // get element at table_offset
-//         result_struct = ret.unwrap()[table_offset as usize].clone();
+//     if let Some(table_data) = ret {
+//         if let Some(entry) = table_data.get(table_offset as usize) {
+//             result_struct = entry.clone();
+//         }
 //     }
-
 //     // Copy the result_struct to the provided memory location
 //     unsafe {
 //         std::ptr::copy_nonoverlapping(&result_struct, result, 1);
@@ -209,3 +186,23 @@ pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_
 //     // Leak the cache to avoid deallocating it
 //     Box::leak(cache);
 // }
+use std::collections::HashMap;
+use std::sync::{Mutex, Arc};
+#[no_mangle]
+pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64, result: *mut R_PhysicalAddr) {
+    let cache = unsafe { &*(cache_ptr as *const Arc<Mutex<HashMap<u64, Vec<R_PhysicalAddr>>>>) };
+
+    let cache_guard = cache.lock().unwrap();
+    let ret = cache_guard.get(&table_id).cloned(); // Clone the table_data
+    let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
+
+    if let Some(table_data) = ret {
+        if let Some(entry) = table_data.get(table_offset as usize) {
+            result_struct = entry.clone(); // Clone the R_PhysicalAddr
+        }
+    }
+    // Copy the result_struct to the provided memory location
+    unsafe {
+        std::ptr::copy_nonoverlapping(&result_struct, result, 1);
+    }
+}

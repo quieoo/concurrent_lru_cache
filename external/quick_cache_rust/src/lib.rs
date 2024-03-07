@@ -195,7 +195,7 @@ pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_
 
     let result_struct = match std::panic::catch_unwind(|| {
         // Try to access the cache and retrieve the result
-        let cache_ref = cache.read().expect("Failed to acquire read lock on cache");
+        let cache_ref = cache.read().unwrap();
         let ret = cache_ref.get(&table_id);
 
         let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value

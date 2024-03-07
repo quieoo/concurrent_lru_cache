@@ -166,76 +166,76 @@ pub extern "C" fn quick_table_cache_insert(cache_ptr: *mut std::ffi::c_void, tab
 
 use std::panic;
 
-// #[no_mangle]
-// pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64, result: *mut R_PhysicalAddr) {
-//     let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<R_PhysicalAddr>>) };
-
-//     let ret = cache.get(&table_id);
-//     let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
-
-//     if let Some(table_data) = ret {
-//         if let Some(entry) = table_data.get(table_offset as usize) {
-//             result_struct = entry.clone();
-//         }
-//     }
-//     // Copy the result_struct to the provided memory location
-//     unsafe {
-//         std::ptr::copy_nonoverlapping(&result_struct, result, 1);
-//     }
-
-//     // Leak the cache to avoid deallocating it
-//     Box::leak(cache);
-// }
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::sync::mpsc;
-
-
 #[no_mangle]
 pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64, result: *mut R_PhysicalAddr) {
-    // Wrap the cache in an Arc<Mutex<...>> to handle potential panics and ensure thread safety
-    let cache = unsafe { Box::from_raw(cache_ptr as *mut Arc<Mutex<Cache<u64, Vec<R_PhysicalAddr>>>>) };
+    let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<R_PhysicalAddr>>) };
 
-    // Use channels for communication between threads
-    let (tx, rx) = mpsc::channel();
+    let ret = cache.get(&table_id);
+    let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
 
-    // Clone the Arc to pass ownership to the spawned thread
-    let cache_clone = Arc::clone(&cache);
-
-    // Spawn a new thread to perform the cache access
-    thread::spawn(move || {
-        let result_struct = match std::panic::catch_unwind(|| {
-            // Try to access the cache and retrieve the result
-            let cache_ref = cache_clone.lock().unwrap(); // Lock the mutex
-            let ret = cache_ref.get(&table_id);
-
-            let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
-
-            if let Some(table_data) = ret {
-                if let Some(entry) = table_data.get(table_offset as usize) {
-                    result_struct = entry.clone();
-                }
-            }
-
-            result_struct
-        }) {
-            Ok(result) => result,
-            Err(_) => R_PhysicalAddr { data: [0xff; 20] }, // Return default result on panic
-        };
-
-        // Send the result back to the main thread
-        tx.send(result_struct).unwrap();
-    });
-
-    // Receive the result from the spawned thread
-    let result_struct = rx.recv().unwrap();
-
+    if let Some(table_data) = ret {
+        if let Some(entry) = table_data.get(table_offset as usize) {
+            result_struct = entry.clone();
+        }
+    }
     // Copy the result_struct to the provided memory location
     unsafe {
         std::ptr::copy_nonoverlapping(&result_struct, result, 1);
     }
 
-    // Leak the Arc to avoid deallocating it
-    std::mem::forget(cache);
+    // Leak the cache to avoid deallocating it
+    Box::leak(cache);
 }
+// use std::sync::{Arc, Mutex};
+// use std::thread;
+// use std::sync::mpsc;
+
+
+// #[no_mangle]
+// pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64, result: *mut R_PhysicalAddr) {
+//     // Wrap the cache in an Arc<Mutex<...>> to handle potential panics and ensure thread safety
+//     let cache = unsafe { Box::from_raw(cache_ptr as *mut Arc<Mutex<Cache<u64, Vec<R_PhysicalAddr>>>>) };
+
+//     // Use channels for communication between threads
+//     let (tx, rx) = mpsc::channel();
+
+//     // Clone the Arc to pass ownership to the spawned thread
+//     let cache_clone = Arc::clone(&cache);
+
+//     // Spawn a new thread to perform the cache access
+//     thread::spawn(move || {
+//         let result_struct = match std::panic::catch_unwind(|| {
+//             // Try to access the cache and retrieve the result
+//             let cache_ref = cache_clone.lock().unwrap(); // Lock the mutex
+//             let ret = cache_ref.get(&table_id);
+
+//             let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
+
+//             if let Some(table_data) = ret {
+//                 if let Some(entry) = table_data.get(table_offset as usize) {
+//                     result_struct = entry.clone();
+//                 }
+//             }
+
+//             result_struct
+//         }) {
+//             Ok(result) => result,
+//             Err(_) => R_PhysicalAddr { data: [0xff; 20] }, // Return default result on panic
+//         };
+
+//         // Send the result back to the main thread
+//         tx.send(result_struct).unwrap();
+//     });
+
+//     // Receive the result from the spawned thread
+//     let result_struct = rx.recv().unwrap();
+
+//     // Copy the result_struct to the provided memory location
+//     unsafe {
+//         std::ptr::copy_nonoverlapping(&result_struct, result, 1);
+//     }
+
+//     // Leak the Arc to avoid deallocating it
+//     std::mem::forget(cache);
+// }
 

@@ -186,23 +186,38 @@ use std::panic;
 //     // Leak the cache to avoid deallocating it
 //     Box::leak(cache);
 // }
-use std::collections::HashMap;
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, RwLock};
+
 #[no_mangle]
 pub extern "C" fn quick_table_cache_get(cache_ptr: *mut std::ffi::c_void, table_id: u64, table_offset: u64, result: *mut R_PhysicalAddr) {
-    let cache = unsafe { &*(cache_ptr as *const Arc<Mutex<HashMap<u64, Vec<R_PhysicalAddr>>>>) };
+    // Wrap the cache in an Arc<RwLock<...>> to handle potential panics and ensure thread safety
+    let cache = unsafe { Box::from_raw(cache_ptr as *mut Arc<RwLock<Cache<u64, Vec<R_PhysicalAddr>>>>) };
 
-    let cache_guard = cache.lock().unwrap();
-    let ret = cache_guard.get(&table_id).cloned(); // Clone the table_data
-    let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
+    let result_struct = match std::panic::catch_unwind(|| {
+        // Try to access the cache and retrieve the result
+        let cache_ref = cache.read().expect("Failed to acquire read lock on cache");
+        let ret = cache_ref.get(&table_id);
 
-    if let Some(table_data) = ret {
-        if let Some(entry) = table_data.get(table_offset as usize) {
-            result_struct = entry.clone(); // Clone the R_PhysicalAddr
+        let mut result_struct = R_PhysicalAddr { data: [0xff; 20] }; // Initialize with default value
+
+        if let Some(table_data) = ret {
+            if let Some(entry) = table_data.get(table_offset as usize) {
+                result_struct = entry.clone();
+            }
         }
-    }
+
+        result_struct
+    }) {
+        Ok(result) => result,
+        Err(_) => R_PhysicalAddr { data: [0xff; 20] }, // Return default result on panic
+    };
+
     // Copy the result_struct to the provided memory location
     unsafe {
         std::ptr::copy_nonoverlapping(&result_struct, result, 1);
     }
+
+    // Leak the cache to avoid deallocating it
+    Box::leak(cache);
 }
+

@@ -33,7 +33,7 @@ void* rustqc_build_index(uint64_t max_cache_entry, int ht_len, uint64_t* lvas, R
     uint64_t l=0;
     uint64_t r;
     int table_num=0;
-    while(l<=key_num){
+    while(l<key_num){
         // get lvas for each directory
         int table_id=lvas[l]>>ht_len;
         r=l+1;
@@ -55,7 +55,7 @@ void* rustqc_build_index(uint64_t max_cache_entry, int ht_len, uint64_t* lvas, R
         }
 
         // get directory file name
-        sprintf(file_name, "tables/dir_%d", table_id);
+        sprintf(file_name, "tables/tbl_%d", table_id);
         FILE* fp = fopen(file_name, "w");
         if(fp!=NULL){
             fwrite(table_data, sizeof(RC_PhysicalAddr), table_data_len, fp);
@@ -91,11 +91,17 @@ int rustqc_get_pa(void* index, uint64_t lva, RC_PhysicalAddr* pa){
         sprintf(file_name, "tables/tbl_%lu", table_id);
         FILE* fp = fopen(file_name, "r");
         if(fp!=NULL){
-            uint64_t table_data_len=1<<(dtable->directory_suffix);
-            RC_PhysicalAddr* table_data=(RC_PhysicalAddr*)malloc(sizeof(RC_PhysicalAddr)*table_data_len);
-            fread(table_data, sizeof(RC_PhysicalAddr), table_data_len, fp);
+            // uint64_t table_data_len=1<<(dtable->directory_suffix);
+            // RC_PhysicalAddr* table_data=(RC_PhysicalAddr*)malloc(sizeof(RC_PhysicalAddr)*table_data_len);
+            // fread(table_data, sizeof(RC_PhysicalAddr), table_data_len, fp);
+            // fclose(fp);
+            // *pa=table_data[table_offset];
+            // seek to offset
+            fseek(fp, table_offset*sizeof(RC_PhysicalAddr), SEEK_SET);
+            fread(pa, sizeof(RC_PhysicalAddr), 1, fp);
             fclose(fp);
-            *pa=table_data[table_offset];
+            
+            //insert to cache
             quick_cache_insert(dtable->quick_cache, lva, *pa);
 
             // // miss happens insert all table data to quick cache

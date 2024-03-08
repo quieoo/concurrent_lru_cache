@@ -444,7 +444,7 @@ void test_rustqc_cache(char* trace_file){
     }
     int ht_len=20;
     // allowed_cache_table=2160*1024*1024/(1<<20 * sizeof(RC_PhysicalAddr))
-    uint64_t allowd_cache_table=key_num/2;
+    uint64_t allowd_cache_table=key_num/3;
     printf("key_num: %lu, ht_len: %d, allowed_cache_table: %llu\n", key_num, ht_len, allowd_cache_table);
     rustqc_dtable* index=rustqc_build_index(allowd_cache_table, ht_len, lpn2, ppn, key_num);
     if(index==NULL){

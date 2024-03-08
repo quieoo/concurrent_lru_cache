@@ -80,15 +80,15 @@ pub extern "C" fn test_cacache() {
     println!("data: {}", String::from_utf8(data).unwrap());
 }
 
-use quick_cache::unsync::Cache;
+use quick_cache::sync::Cache;
 
 #[no_mangle]
 pub extern "C" fn test_quick_cache() {
-    let mut cache = Cache::new(5);
+    let cache = Cache::new(5);
     cache.insert("square", "blue");
     cache.insert("circle", "black");
-    assert_eq!(*cache.get(&"square").unwrap(), "blue");
-    assert_eq!(*cache.get(&"circle").unwrap(), "black");
+    assert_eq!(cache.get(&"square").unwrap(), "blue");
+    assert_eq!(cache.get(&"circle").unwrap(), "black");
     println!("get: {:?}", cache.get(&"square"));
     println!("get: {:?}", cache.get(&"circle"));
 }
@@ -96,7 +96,7 @@ pub extern "C" fn test_quick_cache() {
 #[no_mangle]
 pub extern "C" fn test_quick_cache_table() {
     // create a cache with Key type as uint64_t and Value type a fixed-size array
-    let mut cache = Cache::<u64, [u8; 8]>::new(5);
+    let cache = Cache::<u64, [u8; 8]>::new(5);
     cache.insert(1, [1, 2, 3, 4, 5, 6, 7, 8]);
     println!("get: {:?}", cache.get(&1));
     
@@ -117,7 +117,7 @@ pub extern "C" fn build_quick_cache(entry_num: u64)->*mut std::ffi::c_void {
 
 #[no_mangle]
 pub extern "C" fn quick_cache_insert(cache_ptr: *mut std::ffi::c_void, key: u64, value: R_PhysicalAddr) {
-    let mut cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, R_PhysicalAddr>) };
+    let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, R_PhysicalAddr>) };
     cache.insert(key, value);
     mem::forget(cache);
 }
@@ -158,7 +158,7 @@ pub extern "C" fn quick_table_cache_insert(cache_ptr: *mut std::ffi::c_void, tab
     };
 
     // restore cache
-    let mut cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<R_PhysicalAddr>>) };
+    let cache = unsafe { Box::from_raw(cache_ptr as *mut Cache<u64, Vec<R_PhysicalAddr>>) };
     //insert table into cache
     cache.insert(table_id, value);
     mem::forget(cache);

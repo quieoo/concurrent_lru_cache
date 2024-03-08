@@ -6,118 +6,113 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
-
+int pa_not_found(RC_PhysicalAddr pa){
+    // if all bytes in pa are 0xff, return 1
+    for(int i=0;i<20;i++){
+        if(pa.data[i]!=0xff) return 0;
+    }
+    return 1;
+}
 extern void* build_quick_cache(uint64_t entry_num);
-extern void quick_cache_insert(void* cache, uint64_t key, uint64_t value);
-extern uint64_t quick_cache_query(void* cache, uint64_t key);
+extern void quick_cache_insert(void* cache, uint64_t key, RC_PhysicalAddr value);
+extern RC_PhysicalAddr quick_cache_query(void* cache, uint64_t key);
 
 uint64_t cache_hit=0;
 uint64_t cache_miss=0;
-void* rustqc_build_index(int max_cache_entry, int directory_suffix, uint64_t* lvas, uint64_t* pas, uint64_t key_num){
+void* rustqc_build_index(uint64_t max_cache_entry, int ht_len, uint64_t* lvas, RC_PhysicalAddr* pas, uint64_t key_num){
     rustqc_dtable* dtable=(rustqc_dtable*)malloc(sizeof(rustqc_dtable));
 
     //build quick cache
     void* quick_cache= build_quick_cache(max_cache_entry);
     dtable->quick_cache=quick_cache;
-
-    // //warm up cache
-    // for(uint64_t i=0;i<key_num;i++){
-    //     quick_cache_insert(quick_cache, lvas[i], pas[i]);
-    // }
-
-    dtable->directory_suffix=directory_suffix;
+    dtable->directory_suffix=ht_len;
+    uint64_t table_data_len=1<<ht_len;
     
     // iterate lvas accroading to each directory suffix and create directory
     char file_name[50];
     uint64_t l=0;
     uint64_t r;
-    int created_directory_num=0;
+    int table_num=0;
     while(l<=key_num){
         // get lvas for each directory
-        int directory_id=lvas[l]>>directory_suffix;
+        int table_id=lvas[l]>>ht_len;
         r=l+1;
-        while(r<key_num && (lvas[r]>>directory_suffix)==directory_id){
+        while(r<key_num && (lvas[r]>>ht_len)==table_id){
             r++;
         }
-        printf("directory_id: %d, l: %lu, r: %lu\n", directory_id, l, r);
+        printf("table-%lu, key number: %lu\n", table_id, r-l);
+
+        RC_PhysicalAddr* table_data=(RC_PhysicalAddr*)malloc(sizeof(RC_PhysicalAddr)*table_data_len);
+        for(uint64_t i=l;i<r;i++){
+            uint64_t table_offset=lvas[i]%table_data_len;
+            table_data[table_offset]=pas[i];
+            quick_cache_insert(quick_cache, lvas[i], pas[i]);
+        }
+
         // if "directories" not exist, create it
-        if(access("directories", 0)==-1){
-            mkdir("directories", 0777);
+        if(access("tables", 0)==-1){
+            mkdir("tables", 0777);
         }
 
         // get directory file name
-        sprintf(file_name, "directories/dir_%d", directory_id);
-        // if file not exist, create it and pre-allocate
-        if(access(file_name, 0)){
-            int file_des = open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-            if(file_des!=-1){
-                if(ftruncate(file_des, sizeof(uint64_t)*(1<<directory_suffix))){
-                    printf("ftruncate error\n");
-                    return NULL;
-                }
-            }else{
-                printf("open error\n");
-                return NULL;
-            }
-            close(file_des);
-        }
-        FILE* fp = fopen(file_name, "r+");
+        sprintf(file_name, "tables/dir_%d", table_id);
+        FILE* fp = fopen(file_name, "w");
         if(fp!=NULL){
-            for(uint64_t i=l;i<r;i++){
-                // get file offset according to lva
-                uint64_t offset=lvas[i]%(1<<directory_suffix);
-                // write pa to the specific offset of directory file
-                if(fseek(fp, offset*sizeof(uint64_t), SEEK_SET)==0){
-                    size_t writen=fwrite(&(pas[i]), sizeof(uint64_t), 1, fp);
-                }else{
-                    printf("fseek error\n");
-                    fclose(fp);
-                    return NULL;
-                }
-            }
+            fwrite(table_data, sizeof(RC_PhysicalAddr), table_data_len, fp);
             fclose(fp);
         }else{
             printf("fopen error\n");
             return NULL;
         }
+
+        // // insert table data into quick cache
+        // for(uint64_t i=0;i<table_data_len;i++){
+        //     uint64_t key=table_id*table_data_len+i;
+        //     quick_cache_insert(quick_cache, key, table_data[i]);
+        // }
+
         l=r;
-        created_directory_num++;
+        table_num++;
     }
-    printf("created directory num: %d\n", created_directory_num);
+    printf("created table_num num: %d\n", table_num);
     return dtable;
 }
-int rustqc_get_pa(void* index, uint64_t lva, uint64_t* pa){
+int rustqc_get_pa(void* index, uint64_t lva, RC_PhysicalAddr* pa){
     rustqc_dtable* dtable=(rustqc_dtable*)index;
-    
+
+    RC_PhysicalAddr ret = quick_cache_query(dtable->quick_cache, lva);
     // check quick cache
-    uint64_t value=quick_cache_query(dtable->quick_cache, lva);
-    if(value!=0){
-        *pa=value;
-        ++cache_hit;
-        return 0;
-    }else{
+    if(pa_not_found(ret)){
+        uint64_t table_id=lva>>(dtable->directory_suffix);
+        uint64_t table_offset=lva%(1<<(dtable->directory_suffix));
+    
         ++cache_miss;
-        // get pa from directory
-        int directory_id=lva>>(dtable->directory_suffix);
         char file_name[50];
-        sprintf(file_name, "directories/dir_%d", directory_id);
+        sprintf(file_name, "tables/tbl_%lu", table_id);
         FILE* fp = fopen(file_name, "r");
         if(fp!=NULL){
-            uint64_t offset=lva%(1<<(dtable->directory_suffix));
-            if(fseek(fp, offset*sizeof(uint64_t), SEEK_SET)!=0){
-                printf("fseek error\n");
-                fclose(fp);
-                return -1;
-            }
-            fread(pa, sizeof(uint64_t), 1, fp);
+            uint64_t table_data_len=1<<(dtable->directory_suffix);
+            RC_PhysicalAddr* table_data=(RC_PhysicalAddr*)malloc(sizeof(RC_PhysicalAddr)*table_data_len);
+            fread(table_data, sizeof(RC_PhysicalAddr), table_data_len, fp);
             fclose(fp);
+            *pa=table_data[table_offset];
             quick_cache_insert(dtable->quick_cache, lva, *pa);
+
+            // // miss happens insert all table data to quick cache
+            // for(uint64_t i=0;i<table_data_len;i++){
+            //     uint64_t key=table_id*table_data_len+i;
+            //     quick_cache_insert(dtable->quick_cache, key, table_data[i]);
+            // }
             return 0;
         }else{
-            printf("directory open error\n");
+            printf("fopen error\n");
             return -1;
         }
     }
+
+    *pa=ret;
+    ++cache_hit;
+    return 0;
 }
 
 void get_status(){
@@ -128,6 +123,13 @@ void get_status(){
 extern void* build_quick_table_cache(uint64_t entry_num);
 extern void quick_table_cache_insert(void* cache, uint64_t table_id, RC_PhysicalAddr* table_data, uint64_t table_len);
 extern void quick_table_cache_get(void* cache, uint64_t table_id, uint64_t table_offset, RC_PhysicalAddr* ret);
+extern void set_panic_handler(void (*panic_handler)(const uint8_t*));
+extern void func2(void);
+// Rust-compatible panic handler function
+extern void panic_handler(const uint8_t *info) {
+    printf("C Panic Handler: %s\n", info);
+    // Optionally perform C-specific cleanup or logging operations here
+}
 
 void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas, RC_PhysicalAddr* pas, uint64_t key_num){
     rustqc_dtable* dtable=(rustqc_dtable*)malloc(sizeof(rustqc_dtable));
@@ -171,13 +173,7 @@ void* rustqc_dtable_build_index(int max_cache_entry, int ht_len, uint64_t* lvas,
     return dtable;
 }
 
-int pa_not_found(RC_PhysicalAddr pa){
-    // if all bytes in pa are 0xff, return 1
-    for(int i=0;i<20;i++){
-        if(pa.data[i]!=0xff) return 0;
-    }
-    return 1;
-}
+
 
 int rustqc_dtable_get_pa(void* index, uint64_t lva, RC_PhysicalAddr* pa){
     rustqc_dtable* dtable=(rustqc_dtable*)index;

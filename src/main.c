@@ -410,13 +410,79 @@ void test_rustqu_dtable(char* trace_file){
     rustqc_dtable_clean_local_files();
 }
 
+void test_rustqc_cache(char* trace_file){
+    uint64_t* lpn;
+    uint64_t num=0;
+    get_traces(trace_file, &lpn, &num);
+    printf("got all trace lpn, num: %lu\n", num);
+
+    uint64_t* origin_lpn=(uint64_t*)malloc(num*sizeof(uint64_t));
+    for(uint64_t i=0;i<num;i++){
+        origin_lpn[i]=lpn[i];
+    }
+
+    //sort lpn
+    qsort(lpn, num, sizeof(uint64_t), cmp);
+
+    //remove redundant lpn
+    uint64_t* lpn2=(uint64_t*)malloc(num*sizeof(uint64_t));
+    uint64_t key_num=0;
+    for(uint64_t i=0;i<num;i++){
+        if(i==0 || lpn[i]!=lpn[i-1]){
+            lpn2[key_num++]=lpn[i];
+        }
+    }
+    printf("get unique lpn, num: %lu\n", key_num);
+
+    // for(int i=0;i<num;i++){
+    //     printf("lpn: %lu\n", lpn[i]);
+    // }
+    RC_PhysicalAddr* ppn=(RC_PhysicalAddr*)malloc(key_num*sizeof(RC_PhysicalAddr));
+    for(uint64_t i=0;i<key_num;i++){
+        // set ppn to lpn, byte by byte
+        ppn[i]=get_pa_from_u64(lpn2[i]);
+    }
+    int ht_len=20;
+    // allowed_cache_table=2160*1024*1024/(1<<20 * sizeof(RC_PhysicalAddr))
+    uint64_t allowd_cache_table=(uint64_t)2160*1024*1024/20;
+    printf("key_num: %lu, ht_len: %d, allowed_cache_table: %llu\n", key_num, ht_len, allowd_cache_table);
+    rustqc_dtable* index=rustqc_build_index(allowd_cache_table, ht_len, lpn2, ppn, key_num);
+    if(index==NULL){
+        printf("rustqc_build_index error\n");
+        return;
+    }
+    
+
+    uint64_t s=get_nanotime();
+    RC_PhysicalAddr pa;
+    for(uint64_t i=0;i<num;i++){
+        if(rustqc_get_pa(index, origin_lpn[i], &pa)){
+            printf("rustqc_pa error\n");
+            return NULL;
+        }
+        if(get_u64_from_pa(pa)!=origin_lpn[i]){
+            printf("error. expected: %lu, actual: %lu\n", origin_lpn[i], get_u64_from_pa(pa));
+            return NULL;
+        }
+    }    
+    u64 e=get_nanotime();
+    printf("time: %f us\n", (double)(e-s)/num/1000);
+
+    
+
+    get_status();
+
+    rustqc_dtable_clean_local_files();
+}
+
 int main(int argc, char** argv){
     // // 从参数中获得file
     char* file=argv[1];
     // // trace_test(file);
     // quick_cache_trace_test(argv[1]);
     // rustqc_dtable_test(file);
-    test_rustqu_dtable(file);
+    // test_rustqu_dtable(file);
+    test_rustqc_cache(file);
     
     // quick_cache_test();
 

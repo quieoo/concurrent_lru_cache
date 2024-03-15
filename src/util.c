@@ -24,4 +24,11 @@ void parse_lib_ftl_config(char* file, lib_ftl_config* config){
         sscanf(line, "min_accurate_th: %d\n", &config->min_accurate_th);
     }
     fclose(f);
+    printf("============parse lib_ftl_config============\n");
+    printf("left_epsilon: %d\n", config->left_epsilon);
+    printf("right_epsilon: %d\n", config->right_epsilon);
+    printf("sml_size_limit: %d\n", config->sml_size_limit);
+    printf("dma_size_limit: %d\n", config->dma_size_limit);
+    printf("min_accurate_th: %d\n", config->min_accurate_th);
+    printf("=============================================\n");
 }

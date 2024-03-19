@@ -80,17 +80,19 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     int apxseg_keyub=(int)(acuseg_keyub * config.alpha);
 
 
-    printf("====building index: number of keys: %lld, left epsilon: %d, right epsilon: %d, smart memory limit: %d, DMA memory limit: %d, accurate threshold: %d\n", number, left_epsilon, right_epsilon, SM_capacity, DMA_capacity, acuseg_keylb);
+    // printf("====building index: number of keys: %lld, left epsilon: %d, right epsilon: %d, smart memory limit: %d, DMA memory limit: %d, accurate threshold: %d\n", number, left_epsilon, right_epsilon, SM_capacity, DMA_capacity, acuseg_keylb);
 
     size_t l=0,r;
     while(l<number){
         r=l+1;
         // iterate lvas, divide lvas into continuous segments. In each segment, each lva is 1 larger than the previous one.
         while(r<number && (r-l)<acuseg_keyub && lvas[r]==lvas[r-1]+1) r++;
-
+        printf("l: %lld, r: %lld\n", l, r);
         // only create a accurate segment when the number of keys is large enough
         if(r-l >= acuseg_keylb){
+            printf("    create an accurate segment\n");
             if(asb_num_key>0){
+                printf("        asb_num_key: %lld\n", asb_num_key);
                 // create a approximate segment from current asb
                 compact_pthash pthash;
                 size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, l);
@@ -110,12 +112,14 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
             global_intercept += r-l;
             segment_accurate.push_back(true);
         }else{
+            printf("    add keys to asb\n");
             // otherwise, add them to asb
             asb_num_key+=r-l;
             asb_first_key_offset= l<asb_first_key_offset ? l : asb_first_key_offset;
-
+            printf("        asb_first_key_offset: %lld, asb_num_key: %lld\n", asb_first_key_offset, asb_num_key);
             // create approximate segment when current keys in asb is large enough
             while(asb_num_key>=apxseg_keyub){
+                printf("            create an approximate segment\n");
                 // try to pack apxseg_keyub keys at a time
                 compact_pthash pthash;
                 size_t added_keys=try_build_pthash(pthash, config, lvas, asb_first_key_offset, apxseg_keyub);   //actually, added_keys < apxseg_keyub
@@ -135,5 +139,5 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     printf("==== build hybrid translation layer, number of segments: %d, table_size: %llu\n", pthashs.size(), global_intercept);
 
     // --- build inner index ---
-    
+
 }

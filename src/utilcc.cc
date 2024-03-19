@@ -1,14 +1,3 @@
-#include <cstdint>
-#include <vector>
-#include "pthash_mock.hpp"
-
-typedef uint64_t LVA;
-typedef struct PhysicalAddr{
-    uint8_t data[20];
-}PhysicalAddr;
-typedef pthash::single_phf<pthash::murmurhash2_hash, pthash::compact, false> compact_pthash;
-#define Approximate_Segment_Length 24
-
 /**
  * Generate a compact perfect hash table using the given configuration and range of elements from the input array, lvas.
  *
@@ -25,7 +14,7 @@ size_t try_build_pthash(compact_pthash& pthash, pthash::build_configuration conf
     printf("trying to build pthash with %lld keys\n", num_key);
     // create a vector with offset from lvas and try to build pthash
     while(1){
-        auto ret=pthash.build_in_internal_memory(std::begin(lvas+l), num_key, config);
+        auto ret=pthash.build_in_internal_memory(std::make_move_iterator(lvas+l), num_key, config);
         if(ret.encoding_seconds==-1){
             --num_key;
             if(num_key<=0){
@@ -53,14 +42,14 @@ size_t try_build_pthash(compact_pthash& pthash, pthash::build_configuration conf
 size_t build_pthash(compact_pthash& pthash, pthash::build_configuration config, LVA* lvas, size_t l, size_t r){
     printf("building pthash with %lld keys\n", r-l);
     while(1){
-        auto ret=pthash.build_in_internal_memory(std::begin(lvas+l), r-l, config);
+        auto ret=pthash.build_in_internal_memory(std::make_move_iterator(lvas+l), r-l, config);
         if(ret.encoding_seconds==-1){
             config.alpha *= config.alpha;
         }else{
             break;
         }
     }
-    return f.table_size();
+    return pthash.table_size();
 }
 
 void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon, int right_epsilon, int SM_capacity, int DMA_capacity, int min_accurate_th){
@@ -71,6 +60,13 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     std::vector<compact_pthash> pthashs;
     size_t global_intercept=0;
     pthash::build_configuration config;
+    config.c=3.0;
+    config.alpha=0.99f;
+    config.minimal_output=true;
+    config.verbose_output=false;
+    config.seed=0x123456789;
+    config.num_threads=1;
+    config.dynamic_alpha=true;
     
     // approximate segment buffer
     LVA asb_first_key_offset=UINT64_MAX;
@@ -81,7 +77,7 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     int acuseg_keyub=(DMA_capacity/sizeof(PhysicalAddr));
     int apxseg_keyub=(int)(acuseg_keyub * config.alpha);
 
-/    printf("==== accurate segment key number lower bound: %d, upper bound: %d, approximate segment key upper bound: %d\n", acuseg_keylb, acuseg_keyub, apxseg_keyub);
+    printf("==== accurate segment key number lower bound: %d, upper bound: %d, approximate segment key upper bound: %d\n", acuseg_keylb, acuseg_keyub, apxseg_keyub);
     // printf("====building index: number of keys: %lld, left epsilon: %d, right epsilon: %d, smart memory limit: %d, DMA memory limit: %d, accurate threshold: %d\n", number, left_epsilon, right_epsilon, SM_capacity, DMA_capacity, acuseg_keylb);
 
     size_t l=0,r;

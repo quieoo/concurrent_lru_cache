@@ -87,11 +87,11 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
         r=l+1;
         // iterate lvas, divide lvas into continuous segments. In each segment, each lva is 1 larger than the previous one.
         while(r<number && (r-l)<acuseg_keyub && lvas[r]==lvas[r-1]+1) r++;
-        printf("l: %lld, r: %lld\n", l, r);
+        // printf("l: %lld, r: %lld\n", l, r);
         // only create a accurate segment when the number of keys is large enough
         if(r-l >= acuseg_keylb){
             if(asb_num_key>0){
-                printf("        asb_num_key: %lld\n", asb_num_key);
+                // printf("        asb_num_key: %lld\n", asb_num_key);
                 if(asb_num_key<=1){
                     // create a accurate segment when onle one key is in asb
                     pthashs.push_back(compact_pthash());    //add a empty pthash
@@ -120,14 +120,14 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
             global_intercept += r-l;
             segment_accurate.push_back(true);
         }else{
-            printf("    add keys to asb\n");
+            // printf("    add keys to asb\n");
             // otherwise, add them to asb
             asb_num_key+=r-l;
             asb_first_key_offset= l<asb_first_key_offset ? l : asb_first_key_offset;
-            printf("        asb_first_key_offset: %lld, asb_num_key: %lld\n", asb_first_key_offset, asb_num_key);
+            // printf("        asb_first_key_offset: %lld, asb_num_key: %lld\n", asb_first_key_offset, asb_num_key);
             // create approximate segment when current keys in asb is large enough
             while(asb_num_key>=apxseg_keyub){
-                printf("            create an approximate segment\n");
+                // printf("            create an approximate segment\n");
                 // try to pack apxseg_keyub keys at a time
                 compact_pthash pthash;
                 size_t added_keys=try_build_pthash(pthash, config, lvas, asb_first_key_offset, apxseg_keyub);   //actually, added_keys < apxseg_keyub

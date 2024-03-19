@@ -75,6 +75,7 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     int acuseg_keylb=(number)/(SM_capacity/Approximate_Segment_Length);
     acuseg_keylb=acuseg_keylb < min_accurate_th ? min_accurate_th : acuseg_keylb;
     int acuseg_keyub=(DMA_capacity/sizeof(PhysicalAddr));
+    int apxseg_keylb=acuseg_keylb;
     int apxseg_keyub=(int)(acuseg_keyub * config.alpha);
 
     printf("==== accurate segment key number lower bound: %d, upper bound: %d, approximate segment key upper bound: %d\n", acuseg_keylb, acuseg_keyub, apxseg_keyub);
@@ -128,7 +129,7 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
                 // printf("            create an approximate segment\n");
                 // try to pack apxseg_keyub keys at a time
                 compact_pthash pthash;
-                size_t added_keys=try_build_pthash(pthash, config, lvas, asb_first_key_offset, apxseg_keyub);   //actually, added_keys < apxseg_keyub
+                size_t added_keys=try_build_pthash(pthash, config, lvas, asb_first_key_offset, asb_first_key_offset+apxseg_keyub);   //actually, added_keys < apxseg_keyub
 
                 pthashs.push_back(pthash);
                 segment_first_key.push_back(lvas[asb_first_key_offset]);

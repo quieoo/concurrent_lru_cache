@@ -203,18 +203,19 @@ void* build_index_less_segment(LVA* lvas, PhysicalAddr* pas, size_t number, int 
         // Besides, the number of keys in asb should be more than apxseg_keylb if not zero
         if(r-l >= acuseg_keylb && (asb_num_key<=0 || asb_num_key>=apxseg_keylb)){
             // create a approximate segment from current asb
-            compact_pthash pthash;
-            size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, l);
-            pthashs.push_back(pthash);
-            segment_first_key.push_back(lvas[asb_first_key_offset]);
-            segment_intercept.push_back(global_intercept);
-            segment_accurate.push_back(false);
-            global_intercept += intercept_add;
-            
-            //clear asb
-            asb_first_key_offset=UINT64_MAX;
-            asb_num_key=0;
-            
+            if(asb_num_key>0){
+                compact_pthash pthash;
+                size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, l);
+                pthashs.push_back(pthash);
+                segment_first_key.push_back(lvas[asb_first_key_offset]);
+                segment_intercept.push_back(global_intercept);
+                segment_accurate.push_back(false);
+                global_intercept += intercept_add;
+                
+                //clear asb
+                asb_first_key_offset=UINT64_MAX;
+                asb_num_key=0;
+            }
             // create a accurate segment
             pthashs.push_back(compact_pthash());    //add a empty pthash
             segment_first_key.push_back(lvas[l]);

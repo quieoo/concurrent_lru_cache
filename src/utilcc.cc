@@ -7,7 +7,7 @@ typedef struct PhysicalAddr{
     uint8_t data[20];
 }PhysicalAddr;
 typedef pthash::single_phf<pthash::murmurhash2_hash, pthash::compact, false> compact_pthash;
-#define Approximate_Segment_Size 24
+#define Approximate_Segment_Length 24
 
 /**
  * Generate a compact perfect hash table using the given configuration and range of elements from the input array, lvas.
@@ -74,7 +74,7 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     LVA asb_first_key_offset=UINT64_MAX;
     size_t asb_num_key=0;
 
-    int acuseg_keylb=(number)/(SM_capacity/Approximate_Segment_Size);
+    int acuseg_keylb=(number)/(SM_capacity/Approximate_Segment_Length);
     acuseg_keylb=acuseg_keylb < min_accurate_th ? min_accurate_th : acuseg_keylb;
     int acuseg_keyub=(DMA_capacity/sizeof(PhysicalAddr));
     int apxseg_keyub=(int)(acuseg_keyub * config.alpha);
@@ -90,17 +90,25 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
         printf("l: %lld, r: %lld\n", l, r);
         // only create a accurate segment when the number of keys is large enough
         if(r-l >= acuseg_keylb){
-            printf("    create an accurate segment\n");
             if(asb_num_key>0){
                 printf("        asb_num_key: %lld\n", asb_num_key);
-                // create a approximate segment from current asb
-                compact_pthash pthash;
-                size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, l);
-                pthashs.push_back(pthash);
-                segment_first_key.push_back(lvas[asb_first_key_offset]);
-                segment_intercept.push_back(global_intercept);
-                segment_accurate.push_back(false);
-                global_intercept += intercept_add;
+                if(asb_num_key<=1){
+                    // create a accurate segment when onle one key is in asb
+                    pthashs.push_back(compact_pthash());    //add a empty pthash
+                    segment_first_key.push_back(lvas[asb_first_key_offset]);
+                    segment_intercept.push_back(global_intercept);
+                    global_intercept += 1;
+                    segment_accurate.push_back(true);
+                }else{
+                    // create a approximate segment from current asb
+                    compact_pthash pthash;
+                    size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, l);
+                    pthashs.push_back(pthash);
+                    segment_first_key.push_back(lvas[asb_first_key_offset]);
+                    segment_intercept.push_back(global_intercept);
+                    segment_accurate.push_back(false);
+                    global_intercept += intercept_add;
+                }
                 //clear asb
                 asb_first_key_offset=UINT64_MAX;
                 asb_num_key=0;
@@ -136,6 +144,18 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
         }
         l=r;
     }
+
+    // create the last segment from asb
+    if(asb_num_key>0){
+        compact_pthash pthash;
+        size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, number);
+        pthashs.push_back(pthash);
+        segment_first_key.push_back(lvas[asb_first_key_offset]);
+        segment_intercept.push_back(global_intercept);
+        segment_accurate.push_back(false);
+        global_intercept += intercept_add;
+    }
+
     printf("==== build hybrid translation layer, number of segments: %d, table_size: %llu\n", pthashs.size(), global_intercept);
 
     // --- build inner index ---

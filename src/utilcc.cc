@@ -22,6 +22,7 @@ typedef pthash::single_phf<pthash::murmurhash2_hash, pthash::compact, false> com
  */
 size_t try_build_pthash(compact_pthash& pthash, pthash::build_configuration config, LVA* lvas, size_t l, size_t r){
     size_t num_key=r-l;
+    printf("trying to build pthash with %lld keys\n", num_key);
     // create a vector with offset from lvas and try to build pthash
     while(1){
         auto ret=pthash.build_in_internal_memory(std::begin(lvas+l), num_key, config);
@@ -50,6 +51,7 @@ size_t try_build_pthash(compact_pthash& pthash, pthash::build_configuration conf
  * @return the table size of the compact_pthash after building
  */
 size_t build_pthash(compact_pthash& pthash, pthash::build_configuration config, LVA* lvas, size_t l, size_t r){
+    printf("building pthash with %lld keys\n", r-l);
     while(1){
         auto ret=pthash.build_in_internal_memory(std::begin(lvas+l), r-l, config);
         if(ret.encoding_seconds==-1){
@@ -79,7 +81,7 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     int acuseg_keyub=(DMA_capacity/sizeof(PhysicalAddr));
     int apxseg_keyub=(int)(acuseg_keyub * config.alpha);
 
-
+/    printf("==== accurate segment key number lower bound: %d, upper bound: %d, approximate segment key upper bound: %d\n", acuseg_keylb, acuseg_keyub, apxseg_keyub);
     // printf("====building index: number of keys: %lld, left epsilon: %d, right epsilon: %d, smart memory limit: %d, DMA memory limit: %d, accurate threshold: %d\n", number, left_epsilon, right_epsilon, SM_capacity, DMA_capacity, acuseg_keylb);
 
     size_t l=0,r;

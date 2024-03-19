@@ -32,3 +32,4 @@ void parse_lib_ftl_config(char* file, lib_ftl_config* config){
     printf("min_accurate_th: %d\n", config->min_accurate_th);
     printf("=============================================\n");
 }
+

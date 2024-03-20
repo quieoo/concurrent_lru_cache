@@ -1,3 +1,5 @@
+#define ANSI_CURSOR_UP(n)   "\033[" #n "A"
+
 /**
  * Generate a compact perfect hash table using the given configuration and range of elements from the input array, lvas.
  *
@@ -35,7 +37,7 @@ size_t build_pthash(compact_pthash& pthash, pthash::build_configuration config, 
     size_t num_key=r-l;
     while(1){
         while(1){
-            printf("num_key: %lld  ", num_key);
+            // printf("num_key: %lld  ", num_key);
             auto ret=pthash.build_in_internal_memory(std::make_move_iterator(lvas+l), num_key, config);
             if(ret.encoding_seconds==-1){
                 config.alpha *= config.alpha;
@@ -43,7 +45,7 @@ size_t build_pthash(compact_pthash& pthash, pthash::build_configuration config, 
                 break;
             }
         }
-        printf("| table_size: %lld.   ", pthash.table_size());
+        // printf("| table_size: %lld.   ", pthash.table_size());
         if(pthash.table_size()>max_table_size){
             num_key*=config.alpha;
             continue;
@@ -51,9 +53,11 @@ size_t build_pthash(compact_pthash& pthash, pthash::build_configuration config, 
         *intercept=pthash.table_size();
         break;
     }
-    printf("\n");
+    // printf("\n");
     return num_key;
 }
+
+
 
 void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon, int right_epsilon, int SM_capacity, int DMA_capacity, int min_accurate_th){
     // --- build hybrid translation layer ---
@@ -89,6 +93,10 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
         r=l+1;
         // iterate lvas, divide lvas into continuous segments. In each segment, each lva is 1 larger than the previous one.
         while(r<number && (r-l)<acuseg_keyub && lvas[r]==lvas[r-1]+1) r++;
+
+        float percent=(float)(l)/(float)number;
+        printf("\r%.1f%%\n", percent*100.0f);
+        std::cout<<ANSI_CURSOR_UP(1);
         // printf("l: %lld, r: %lld\n", l, r);
         // only create a accurate segment when the number of keys is large enough
         

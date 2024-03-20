@@ -163,14 +163,17 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     }
 
     // create the last segment from asb
-    if(asb_num_key>0){
+    while(asb_num_key>0){
         compact_pthash pthash;
-        size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, number);
+        size_t intercept_add;
+        size_t added_keys==build_pthash(pthash, config, lvas, asb_first_key_offset, number, &intercept_add, apxseg_keyub);
         pthashs.push_back(pthash);
         segment_first_key.push_back(lvas[asb_first_key_offset]);
         segment_intercept.push_back(global_intercept);
         segment_accurate.push_back(false);
         global_intercept += intercept_add;
+        asb_first_key_offset+=added_keys;
+        asb_num_key-=added_keys;
     }
 
     printf("==== build hybrid translation layer, number of segments: %d, table_size: %llu\n", pthashs.size(), global_intercept);

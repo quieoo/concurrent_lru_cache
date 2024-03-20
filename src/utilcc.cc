@@ -85,7 +85,7 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
     int apxseg_keylb=acuseg_keylb;
     int apxseg_keyub=(int)(acuseg_keyub * config.alpha);
 
-    printf("==== accurate segment key number lower bound: %d, upper bound: %d, approximate segment key upper bound: %d\n", acuseg_keylb, acuseg_keyub, apxseg_keyub);
+    printf("==== Building Hybrid Translation Layer: accurate segment key number lower bound: %d, upper bound: %d, approximate segment key upper bound: %d\n", acuseg_keylb, acuseg_keyub, apxseg_keyub);
     // printf("====building index: number of keys: %lld, left epsilon: %d, right epsilon: %d, smart memory limit: %d, DMA memory limit: %d, accurate threshold: %d\n", number, left_epsilon, right_epsilon, SM_capacity, DMA_capacity, acuseg_keylb);
 
     size_t l=0,r;
@@ -95,7 +95,7 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
         while(r<number && (r-l)<acuseg_keyub && lvas[r]==lvas[r-1]+1) r++;
 
         float percent=(float)(l)/(float)number;
-        printf("\r%.1f%%\n", percent*100.0f);
+        printf("    \r%.1f%%\n", percent*100.0f);
         std::cout<<ANSI_CURSOR_UP(1);
         // printf("l: %lld, r: %lld\n", l, r);
         // only create a accurate segment when the number of keys is large enough
@@ -188,9 +188,46 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
         asb_num_key-=added_keys;
     }
 
-    printf("==== build hybrid translation layer, number of segments: %d, table_size: %llu\n", pthashs.size(), global_intercept);
+    printf("    Number of segments: %d, table_size: %llu\n", pthashs.size(), global_intercept);
 
     // --- build inner index ---
+    printf("==== Building inner index: min_epsilon=%d, max_epsilon=%d\n", left_epsilon, right_epsilon);
+
+    std::vector<std::pair<LVA, uint64_t>> segs;
+    segs.resize(segment_first_key.size());
+    mspla::EPLAIndexMapV2<LVA, uint64_t, 128> clmap;
+    int ans_er;
+
+    for(uint64_t i=0;i<segs.size();++i){
+        segs[i].first=segment_first_key[i];
+        segs[i].second=i;
+    }
+    // check if segs is sorted
+    for(uint64_t i=1;i<segs.size();++i){
+        if(segs[i].first<segs[i-1].first){
+            printf("error: segs is not sorted\n");
+            return NULL;
+        }
+    }
+
+    // binary search for a smallest epsion that make the smallest number of level of inner index
+    mspla::EPLAIndexMapV2<LVA, uint64_t, 128> tmp_clmap(segs, segs.size(), right_epsilon, right_epsilon, 0);
+    int min_level=tmp_clmap.levels_offsets.size()-1;
+    while(left_epsilon <= right_epsilon){
+        int mid=(left_epsilon+right_epsilon)/2;
+        mspla::EPLAIndexMapV2<LVA, uint64_t, 128> tmp_clmap(segs, segs.size(), mid, mid, 0);
+        if(tmp_clmap.levels_offsets.size()-1==min_level){
+            ans_er=mid;
+            clmap=tmp_clmap;
+            right_epsilon=mid-1;
+        }else{
+            left_epsilon=mid+1;
+        }
+    }
+
+    printf("    Found smallest epsilon: %d, minimum level of inner index: %d, number of nodes: %d\n", ans_er, min_level, clmap.segments.size());
+
+    return NULL;
 
 }
 

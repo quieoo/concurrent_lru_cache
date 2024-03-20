@@ -30,29 +30,29 @@ size_t try_build_pthash(compact_pthash& pthash, pthash::build_configuration conf
     return num_key;
 }
 
-/**
- * Builds a compact_pthash using the provided configuration and range of LVA elements.
- *
- * @param pthash the compact_pthash to build
- * @param config the build configuration for the pthash
- * @param lvas pointer to the array of LVA elements
- * @param l the starting index of the range
- * @param r the ending index of the range
- *
- * @return the table size of the compact_pthash after building
- */
-size_t build_pthash(compact_pthash& pthash, pthash::build_configuration config, LVA* lvas, size_t l, size_t r){
+
+size_t build_pthash(compact_pthash& pthash, pthash::build_configuration config, LVA* lvas, size_t l, size_t r, size_t* intercept, int max_table_size){
+    size_t num_key=r-l;
     while(1){
-        printf("building pthash with %lld keys. ", r-l);
-        auto ret=pthash.build_in_internal_memory(std::make_move_iterator(lvas+l), r-l, config);
-        if(ret.encoding_seconds==-1){
-            config.alpha *= config.alpha;
-        }else{
-            break;
+        while(1){
+            printf("building pthash with %lld keys. ", r-l);
+            auto ret=pthash.build_in_internal_memory(std::make_move_iterator(lvas+l), r-l, config);
+            if(ret.encoding_seconds==-1){
+                config.alpha *= config.alpha;
+            }else{
+                break;
+            }
         }
+        printf("| table_size: %lld", pthash.table_size());
+        if(pthash.table_size()>max_table_size){
+            num_key*=config.alpha;
+            continue;
+        }
+        *intercept=pthash.table_size();
+        break;
     }
-    printf("table size: %lld\n", pthash.table_size());
-    return pthash.table_size();
+    printf("\n");
+    return num_key;
 }
 
 void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon, int right_epsilon, int SM_capacity, int DMA_capacity, int min_accurate_th){
@@ -104,12 +104,26 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
                 }else{
                     // create a approximate segment from current asb
                     compact_pthash pthash;
-                    size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, l);
+                    size_t intercept_add;
+                    size_t added_keys=build_pthash(pthash, config, lvas, asb_first_key_offset, l, &intercept_add, acuseg_keyub);
                     pthashs.push_back(pthash);
                     segment_first_key.push_back(lvas[asb_first_key_offset]);
                     segment_intercept.push_back(global_intercept);
                     segment_accurate.push_back(false);
                     global_intercept += intercept_add;
+                    
+                    if(added_keys<(l-asb_first_key_offset) && added_keys<asb_num_key){
+                        // In some case, the added keys is shrinked due to pthash building time threshold.
+                        asb_first_key_offset+=added_keys;
+                        asb_num_key-=added_keys;
+                        compact_pthash pthash;
+                        added_keys=build_pthash(pthash, config, lvas, asb_first_key_offset, l, &intercept_add, acuseg_keyub);
+                        pthashs.push_back(pthash);
+                        segment_first_key.push_back(lvas[asb_first_key_offset]);
+                        segment_intercept.push_back(global_intercept);
+                        segment_accurate.push_back(false);
+                        global_intercept += intercept_add;
+                    }
                 }
                 //clear asb
                 asb_first_key_offset=UINT64_MAX;
@@ -132,7 +146,8 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
                 // printf("            create an approximate segment\n");
                 // try to pack apxseg_keyub keys at a time
                 compact_pthash pthash;
-                size_t intercept_add=build_pthash(pthash, config, lvas, asb_first_key_offset, asb_first_key_offset+apxseg_keyub); 
+                size_t intercept_add;
+                size_t added_keys=build_pthash(pthash, config, lvas, asb_first_key_offset, asb_first_key_offset+apxseg_keyub, &intercept_add, apxseg_keyub); 
 
                 pthashs.push_back(pthash);
                 segment_first_key.push_back(lvas[asb_first_key_offset]);
@@ -140,8 +155,8 @@ void* build_index(LVA* lvas, PhysicalAddr* pas, size_t number, int left_epsilon,
                 segment_accurate.push_back(false);
                 global_intercept+=intercept_add;
 
-                asb_first_key_offset+=apxseg_keyub;
-                asb_num_key-=apxseg_keyub;
+                asb_first_key_offset+=added_keys;
+                asb_num_key-=added_keys;
             }
         }
         l=r;

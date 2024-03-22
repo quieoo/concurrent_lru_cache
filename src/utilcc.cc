@@ -399,9 +399,3 @@ void get_clpam(void*index, clpam* clpam){
 }
 
 
-
-void dlpam_get_htl_first_key(void* index, uint8_t* data){
-    clhash_v5 *clhash = (clhash_v5 *)index;
-    memcpy(data, clhash->htl_first_key, (clhash->num_leaf_segment)*sizeof(LVA));
-}
-

@@ -33,7 +33,7 @@ uint32_t get_htl_idx(void *map, LVA la);
 uint64_t get_pa_pos_v5(void* index, LVA lva);
 void *build_index(LVA *lvas, PhysicalAddr *pas, size_t number, int left_epsilon, int right_epsilon, int SM_capacity, int DMA_capacity, int min_accurate_th);
 size_t dlpam_Lindex_bytes(void* map);
-void dlpam_get_Lindex(inner_nodes* index, uint8_t* data);
+void get_clpam(void*index, clpam* clpam);
 
 
 

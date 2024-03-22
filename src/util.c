@@ -164,6 +164,13 @@ void test_dlpam_on_host(LVA* lvas, PhysicalAddr* pas, int number){
         while((level_node_idx+1)<num_htl_segment) && (ptr[level_node_idx+1]<=key){
             ++level_node_idx;
         }
+
+        uint32_t htl_idx_o=get_htl_idx(index, lva);
+        if(htl_idx_o != level_node_idx){
+            printf(" error htl_idx_o: %d, level_node_idx: %d\n", htl_idx_o, level_node_idx);
+            return;
+        }
+
         uint64_t seg_first_key=ptr[level_node_idx];
 
         // htl process

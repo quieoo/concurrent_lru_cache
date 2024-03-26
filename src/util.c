@@ -45,55 +45,67 @@ void test_dlpam_on_host(LVA* lvas, PhysicalAddr* pas, int number){
     void* index=build_index(lvas, pas, number, config.left_epsilon, config.right_epsilon, config.sml_size_limit, config.dma_size_limit, config.min_accurate_th);
 
     // --- offload index ---
-    clpam cindex=get_clpam(index);
+    clpam cindex;
+    get_clpam(index, &cindex);
+    cindex.pthash_addrs=(void**)malloc((cindex.num_leaf_segment+2)*sizeof(void*));
+    memset(cindex.pthash_addrs, 0, (cindex.num_leaf_segment+2)*sizeof(void*));
+    cindex.data_tables=(void**)malloc((cindex.num_leaf_segment+2)*sizeof(void*));
+    memset(cindex.data_tables, 0, (cindex.num_leaf_segment+2)*sizeof(void*));
+    cindex.data_table_size=(size_t*)malloc((cindex.num_leaf_segment+2)*sizeof(size_t));
+    memset(cindex.data_table_size, 0, (cindex.num_leaf_segment+2)*sizeof(size_t));
+
     uint64_t* ptr;
 
     // - offload Lindex -
     size_t Lindex_bytes=16;
-    Lindex_bytes+=((clpam.num_levels * sizeof(uint32_t))+15)/16*16;
-    Lindex_bytes+=clpam.num_segments * sizeof(cSegmentv2);
+    Lindex_bytes+=((cindex.num_levels * sizeof(uint32_t))+15)/16*16;
+    Lindex_bytes+=cindex.num_segments * sizeof(cSegmentv2);
     uint8_t* Lindex=(uint8_t*)malloc(Lindex_bytes);
     ptr=(uint64_t*)Lindex;
-    ptr[0]=clpam.first_key;
+    ptr[0]=cindex.first_key;
     uint64_t meta=0;    // the first 2 bytes stores num_level, second 2 bytes stores epsilon, the last 4 bytes stores num_segments
-    meta|=((clpam.num_levels<<48)&(0xffff000000000000));
-    meta|=(clpam.epsilon_recursive<<32)&(0x0000ffff00000000);
-    meta|=(clpam.num_leaf_segment&(0x00000000ffffffff));
+    meta|=((cindex.num_levels<<48)&(0xffff000000000000));
+    meta|=(cindex.epsilon_recursive<<32)&(0x0000ffff00000000);
+    meta|=(cindex.num_leaf_segment&(0x00000000ffffffff));
     ptr[1]=meta;
     // fit level_offsets, aligned to 16B
     ptr+=2;
-    memcpy(ptr, clpam.level_offsets, (clpam.num_levels)*sizeof(uint32_t));
+    memcpy(ptr, cindex.level_offsets, (cindex.num_levels)*sizeof(uint32_t));
     // fit segments
-    ptr+=(((clpam.num_levels)*sizeof(uint32_t)+15)/16)*2;
-    memcpy(ptr, clpam.segments, (clpam.num_segments)*sizeof(cSegmentv2));
+    ptr+=(((cindex.num_levels)*sizeof(uint32_t)+15)/16)*2;
+    memcpy(ptr, cindex.segments, (cindex.num_segments)*sizeof(cSegmentv2));
 
 
     // - offload htl_first_key -
-    uint8_t* htl_first_key=(uint8_t*)malloc((clpam.num_leaf_segment) * sizeof(LVA));
-    memcpy(htl_first_key, clpam.htl_first_key, (clpam.num_leaf_segment) * sizeof(LVA));
+    uint8_t* htl_first_key=(uint8_t*)malloc((cindex.num_leaf_segment) * sizeof(LVA));
+    memcpy(htl_first_key, cindex.htl_first_key, (cindex.num_leaf_segment) * sizeof(LVA));
 
     // - htl_data -
-    uint8_t* htl_data=(uint8_t*)malloc(clpam.num_leaf_segment * 16);
+    uint8_t* htl_data=(uint8_t*)malloc(cindex.num_leaf_segment * 16);
+    cindex.htl_data_addr=htl_data;
     uint64_t* ptr_htl_data=(uint64_t*)htl_data;
+    ptr_htl_data+=4;
 
     // -- iterate and process each htl segment -- 
-    for(int i=0;i<clpam.num_leaf_segment;i++){
+    for(int i=0;i<cindex.num_leaf_segment;i++){
         // get table data
-        uint64_t intercept=clpam.htl_intercept[i];
+        uint64_t intercept=cindex.htl_intercept[i];
         uint8_t accurate=intercept>>63;
         if(accurate)    intercept=intercept&(~(1ULL<<63));
         uint64_t next_intercept;
-        if(i!=clpam.num_leaf_segment-1){
-            next_intercept=clpam.htl_intercept[i+1];
+        if(i!=cindex.num_leaf_segment-1){
+            next_intercept=cindex.htl_intercept[i+1];
             if(next_intercept>>63){
                 next_intercept=next_intercept&(~(1ULL<<63));
             }
         }else{
-            next_intercept=clpam.global_intercept;
+            next_intercept=cindex.global_intercept;
         }
         uint64_t table_key_num=next_intercept-intercept;
-        uint8_t* data_address=(uint8_t*)malloc(table_size);
-        memcpy(data_address, (uint8_t*)(clpam.data+intercept), table_key_num*sizeof(PhysicalAddr));
+        void* data_address=malloc(table_size);
+        memcpy(data_address, (uint8_t*)(cindex.data+intercept), table_key_num*sizeof(PhysicalAddr));
+        cindex.data_tables[i+2]=data_address;
+        cindex.data_table_size[i+2]=table_key_num*sizeof(PhysicalAddr);
 
         // construct htl data
         if(accurate){
@@ -107,9 +119,9 @@ void test_dlpam_on_host(LVA* lvas, PhysicalAddr* pas, int number){
 
             // construct and offload pthash
             hash_table_structure_v3 hts;
-            get_pthash_data_v5(&hts, index, i);
+            get_pthash_data_v5(&hts, index, i+2);
             uint64_t pthash_bytes=hts.compact_pilots_len*sizeof(uint64_t)+16;
-            uint8_t* pthash_address=(uint8_t*)malloc(pthash_bytes);
+            void* pthash_address=malloc(pthash_bytes);
             uint64_t* ptr_pthash=(uint64_t*)pthash_address;
             ptr_pthash[0]=(uint64_t)data_address;
             ptr_pthash[1]=intercept;
@@ -122,12 +134,18 @@ void test_dlpam_on_host(LVA* lvas, PhysicalAddr* pas, int number){
 
             ptr_htl_data[2*i]=(uint64_t)pthash_address;
             ptr_htl_data[2*i+1]=pthash_meta;
+
+            cindex.pthash_addrs[i+2]=pthash_address;
         }
     }
 
 
     // --- query ---
     for(uint64_t i=0;i<number;i++){
+        float percent=(float)i/(float)number*100;
+        printf("\r%d%%", (int)percent);
+        
+
         LVA lva=lvas[i];
 
         // search Lindex
@@ -136,6 +154,7 @@ void test_dlpam_on_host(LVA* lvas, PhysicalAddr* pas, int number){
         uint32_t num_level=(uint32_t)(ptr[1]>>48);
         uint32_t ep=(uint32_t)(ptr[1]>>32)&(0x0000ffff);
         uint32_t num_htl_segment=(uint32_t)(ptr[1]);
+   
         uint32_t *level_offsets=(uint32_t*)(ptr+2);
         cSegmentv2 *segments=(cSegmentv2*)(ptr+2+(((num_level)*sizeof(uint32_t)+15)/16)*2);
 
@@ -235,5 +254,156 @@ void test_dlpam_on_host(LVA* lvas, PhysicalAddr* pas, int number){
             printf("\n");
             return;
         }
+    }
+
+    printf(" clean\n");
+    for(int i=0;i<cindex.num_leaf_segment+2;i++){
+        if(!(cindex.data_tables[i]==NULL))
+            free(cindex.data_tables[i]);
+        if(!(cindex.pthash_addrs[i]==NULL)){
+            free(cindex.pthash_addrs[i]);
+        }
+    }
+    free(cindex.data_tables);
+    free(cindex.pthash_addrs);
+}
+
+
+
+// set the last 8 bytes of pa to la
+void fill_pa(LVA* lvas, PhysicalAddr* pas, size_t number){
+    for(size_t i=0;i<number;++i){
+        memcpy(pas[i].data+8, &(lvas[i]), 8);
+    }
+}
+
+size_t get_lva2pa_from_table(void* table_data, size_t table_data_size, LVA2PA* ret){
+    PhysicalAddr* table=(PhysicalAddr*)table_data;
+    size_t len=table_data_size/sizeof(PhysicalAddr);
+    size_t lva_len=0;
+    for(size_t i=0;i<len;++i){
+        int valid=0;
+        // check if all 20 bytes in data fields are 0
+        for(int j=0;j<20;++j){
+            if(table[i].data[j]!=0){
+                valid=1;
+                break;
+            }
+        }
+        if(valid){
+            // get lva2pa from the last 8 bytes
+            memcpy(&(ret[lva_len].lva), table[i].data+8, 8);
+            memcpy(&(ret[lva_len].pa), table[i].data, 20);
+            ++lva_len;
+        }
+    }
+
+    return lva_len;
+}
+
+int compare_lva2pa(const void* a, const void* b){
+    LVA2PA* pa1=(LVA2PA*)a;
+    LVA2PA* pa2=(LVA2PA*)b;
+    return pa1->lva - pa2->lva;
+}
+
+/*
+    handle new inseartion
+    new_lvas: sorted new lvas. Make sure they are not in current clpam
+*/
+void dlpam_partial_reconstruct(void* index, clpam* cindex, LVA* new_lvas, PhysicalAddr* new_pas, size_t number, int dma_capacity){
+    uint64_t l=0;
+    uint64_t r=0;
+
+    int htl_seg_id=-1;
+    LVA htl_seg_first_key=cindex->first_key;
+    LVA2PA* new_la2pas=(LVA2PA*)malloc(dma_capacity);
+    while(l<number){
+        // divide lvas to htl segments
+        while(l<number && new_lvas[l]>htl_seg_first_key){
+            ++htl_seg_id;
+            if(htl_seg_id < cindex->num_leaf_segment){
+                htl_seg_first_key=cindex->htl_first_key[htl_seg_id];
+            }else{
+                htl_seg_first_key=cindex->last_key;
+            }
+        }
+        r=l+1;
+        while(r<number && new_lvas[r]<=htl_seg_first_key){
+            ++r;
+        }
+        
+        // insert lva pas from [l,r) to htl segment 'htl_seg_id': 
+        // (0) get original table data, merge it with new lvas
+        size_t data_table_idx;
+        if(htl_seg_id==-1){
+            data_table_idx=0;
+        }else if(htl_seg_id >= cindex->num_leaf_segment){
+            data_table_idx=1;
+        }else{
+            data_table_idx=2+htl_seg_id;
+        }
+        size_t new_la2pa_num=get_lva2pa_from_table(cindex->data_tables[data_table_idx], cindex->data_table_size[data_table_idx], new_la2pas);
+        if(new_la2pa_num + r-l > (dma_capacity)/sizeof(PhysicalAddr)){
+            printf("error: new_la2pa_num + r-l > (dma_capacity)/sizeof(PhysicalAddr)\n");
+            return;
+        }
+        for(int i=0; i<r-l; ++i){
+            LVA2PA inst;
+            inst.lva=new_lvas[l+i];
+            inst.pa=new_pas[l+i];
+            new_la2pas[new_la2pa_num+i]=inst;
+        }
+        new_la2pa_num+=r-l;
+        qsort(new_la2pas, new_la2pa_num, sizeof(LVA2PA), compare_lva2pa);
+
+        //  (2) rebuild pthash
+        size_t new_table_size=rebuild_pthash(index, new_la2pas, new_la2pa_num, data_table_idx)*sizeof(PhysicalAddr);
+        if(new_table_size > dma_capacity){
+            printf("error: new_table_size > dma_capacity\n");
+            return;
+        }
+        hash_table_structures_v3 hts;
+        get_pthash_data_v5(&hts, index, data_table_idx);
+
+        // (3) offload new table and pthash
+        PhysicalAddr* new_table=(PhysicalAddr*)malloc(new_table_size);
+        rebuild_appseg_table(index, new_table, new_table_size, data_table_idx, new_la2pas, new_la2pa_num);
+        uint64_t pthash_bytes=hts.compact_pilots_len*sizeof(uint64_t)+16;
+        uint64_t* new_pthash=(uint64_t*)malloc(pthash_bytes);
+        new_pthash[0]=(uint64_t)new_table;
+        new_pthash[1]=0;
+        memcpy(new_pthash+2, hts.compact_pilots, hts.compact_pilots_len*sizeof(uint64_t));
+        uint64_t new_pthash_meta=0;
+        new_pthash_meta |= ((hts.m_bucket_size<<40) & 0xffffff0000000000);
+        new_pthash_meta |= ((hts.m_compact_pilot_width<<32) & 0x000000ff00000000);
+        new_pthash_meta |= ((hts.m_table_size) & 0x00000000ffffffff);
+
+
+        //  (4) lock htl segment by set the first bit of corresponding pthash
+        uint64_t* pthash_data=(uint64_t*)(cindex.pthash_addrs[data_table_idx]);
+        *pthash_data = *pthash_data | (1ULL<<63);
+
+        //  (5) update htl segment
+        uint64_t* htl_data=(uint64_t*)(cindex->htl_data_addr);
+        htl_data[data_table_idx*2+1]=new_pthash_meta;
+        htl_data[data_table_idx*2]=(uint64_t)new_pthash;
+
+        //  (6) clean and update cindex        
+        free(cindex->data_tables[data_table_idx]);
+        free(cindex->pthash_addrs[data_table_idx]);
+        cindex->data_tables[data_table_idx]=new_table;
+        cindex->data_table_size[data_table_idx]=new_table_size;
+        cindex->pthash_addrs[data_table_idx]=new_pthash;
+
+        // move to next htl segment
+        l=r;
+        ++htl_seg_id;
+        if(htl_seg_id < cindex->num_leaf_segment){
+            htl_seg_first_key=cindex->htl_first_key[htl_seg_id];
+        }else{
+            htl_seg_first_key=cindex->last_key;
+        }
+
     }
 }

@@ -11,8 +11,14 @@ typedef struct PhysicalAddr{
     uint8_t data[20];
 }PhysicalAddr;
 
+typedef struct LVA2PA{
+    LVA lva;
+    PhysicalAddr pa;
+}LVA2PA;
+
 typedef struct clpam{
     LVA first_key;
+    LVA last_key;
     uint32_t num_levels;
     uint32_t *level_offsets;
     uint32_t num_segments;
@@ -23,8 +29,14 @@ typedef struct clpam{
     LVA* htl_first_key;
     uint64_t *htl_intercept;
     uint64_t global_intercept;
-
     PhysicalAddr *data;
+
+    // offload index
+    void** pthash_addrs;
+    void** data_tables;
+    size_t* data_table_size;
+    void* htl_data_addr;
+    
 }clpam;
 
 

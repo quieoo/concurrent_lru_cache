@@ -153,6 +153,7 @@ uint64_t get_pa_pos_v5(void* index, LVA lva){
     return pos;
 }
 
+
 void *build_index(LVA *lvas, PhysicalAddr *pas, size_t number, int left_epsilon, int right_epsilon, int SM_capacity, int DMA_capacity, int min_accurate_th)
 {
     // --- build hybrid translation layer ---
@@ -344,6 +345,11 @@ void *build_index(LVA *lvas, PhysicalAddr *pas, size_t number, int left_epsilon,
     // --- build table
     printf(" ## Building table\n");
     clhash_v5 *map=new clhash_v5;
+    compact_pthash ni_seg;
+    compact_pthash pi_seg;
+    map->pthash_map.push_back(ni_seg);
+    map->pthash_map.push_back(pi_seg);
+
     for(int i=0;i<pthashs.size();++i){
         map->pthash_map.push_back(pthashs[i]);
     }
@@ -372,7 +378,7 @@ void *build_index(LVA *lvas, PhysicalAddr *pas, size_t number, int left_epsilon,
             map->htl_intercept[i]|=1ULL<<63;
         }
     }
-    map->data=(PhysicalAddr*)malloc((map->global_intercept)*sizeof(PhysicalAddr));
+    map->data=(PhysicalAddr*)calloc((map->global_intercept)*sizeof(PhysicalAddr));
 
     for(size_t i=0;i<number;++i){
         uint64_t pos=get_pa_pos_v5(map, lvas[i]);
@@ -383,19 +389,62 @@ void *build_index(LVA *lvas, PhysicalAddr *pas, size_t number, int left_epsilon,
 
 }
 
-void get_clpam(void*index, clpam* clpam){
+void get_clpam(void*index, clpam* cindex){
     clhash_v5 *clhash = (clhash_v5 *)index;
-    clpam->first_key=clhash->first_key;
-    clpam->num_levels=clhash->num_levels;
-    clpam->level_offsets=clhash->level_offsets;
-    clpam->num_segments=clhash->num_segments;
-    clpam->segments=clhash->segments;
-    clpam->epsilon=clhash->epsilon_recursive;
-    clpam->num_leaf_segment=clhash->num_leaf_segment;
-    clpam->htl_first_key=clhash->htl_first_key;
-    clpam->htl_intercept=clhash->htl_intercept;
-    clpam->data=clhash->data;
-    clpam->global_intercept=clhash->global_intercept;
+    cindex->first_key=clhash->first_key;
+    cindex->last_key=clhash->last_key;
+    cindex->num_levels=clhash->num_levels;
+    cindex->level_offsets=clhash->level_offsets;
+    cindex->num_segments=clhash->num_segments;
+    cindex->segments=clhash->segments;
+    cindex->epsilon=clhash->epsilon_recursive;
+    cindex->num_leaf_segment=clhash->num_leaf_segment;
+    cindex->htl_first_key=clhash->htl_first_key;
+    cindex->htl_intercept=clhash->htl_intercept;
+    cindex->data=clhash->data;
+    cindex->global_intercept=clhash->global_intercept;
 }
 
 
+size_t rebuild_pthash(void* index, LVA2PA* lva2pas, size_t num, int data_table_idx){
+    clhash_v5 *clhash = (clhash_v5 *)index;
+    compact_pthash pthash;
+    pthash::build_configuration config;
+    config.c = 3.0;
+    config.alpha = 0.99f;
+    config.minimal_output = true;
+    config.verbose_output = false;
+    config.seed = 0x123456789;
+    config.num_threads = 1;
+    config.dynamic_alpha = true;
+
+    std::vector<LVA> lvas;
+    for(size_t i=0;i<num;++i){
+        lvas.push_back(lva2pas[i].lva);
+    }
+    
+    while(1){
+        auto ret = pthash.build_in_internal_memory(std::make_move_iterator(lvas.begin()), num, config);
+        if(ret.encoding_seconds == -1){
+            config.alpha *= config.alpha;
+        }else{
+            break;
+        }
+    }
+
+    clhash->pthash_map[data_table_idx]=pthash;
+
+    return pthash.table_size();
+}
+
+void rebuild_appseg_table(void* index, void* table, int data_table_idx, LVA2PA* lva2pas, size_t num){
+    clhash_v5 *clhash = (clhash_v5 *)index;
+    PhysicalAddr* table_ptr=(PhysicalAddr*)table;
+
+    compact_pthash pthash=clhash->pthash_map[data_table_idx];
+    for(size_t i=0;i<num;++i){
+        LVA lva=lva2pas[i].lva;
+        uint64_t pos=pthash(lva);
+        memcpy(table_ptr+pos, lva2pas[i].pa.data, sizeof(PhysicalAddress));
+    }
+}

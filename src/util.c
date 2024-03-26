@@ -102,6 +102,7 @@ void dlpam_partial_reconstruct(void* index, clpam* cindex, LVA* new_lvas, Physic
             ++r;
         }
         
+        printf("insert keys with lva range [%ld, %ld), keys[%llx, %llx), to htl segment %d, with first_key %llx\n", l, r, new_lvas[l], new_lvas[r-1], htl_seg_id, htl_seg_first_key);
         // insert lva pas from [l,r) to htl segment 'htl_seg_id': 
         // (0) get original table data, merge it with new lvas
         size_t data_table_idx;

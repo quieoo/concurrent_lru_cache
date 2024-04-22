@@ -44,6 +44,11 @@ void fill_pa(LVA* lvas, PhysicalAddr* pas, size_t number){
     }
 }
 
+LVA get_lva_from_pa(PhysicalAddr* pa){
+    LVA lva;
+    memcpy(&lva, pa->data+8, 8);
+    return lva;
+}
 
 
 size_t get_lva2pa_from_table(void* table_data, size_t table_data_size, LVA2PA* ret){
@@ -88,6 +93,7 @@ void dlpam_partial_reconstruct(void* index, clpam* cindex, LVA* new_lvas, Physic
     LVA htl_seg_first_key=cindex->first_key;
     LVA2PA* new_la2pas=(LVA2PA*)malloc(dma_capacity);
     while(l<number){
+        
         // divide lvas to htl segments
         while(l<number && new_lvas[l]>htl_seg_first_key){
             ++htl_seg_id;

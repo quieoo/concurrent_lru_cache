@@ -67,6 +67,8 @@ try_build_pthash(compact_pthash &pthash, pthash::build_configuration config, LVA
     return num_key;
 }
 
+
+
 size_t build_pthash(compact_pthash &pthash, pthash::build_configuration config, LVA *lvas, size_t l, size_t r, size_t *intercept, int max_table_size)
 {
     size_t num_key = r - l;
@@ -405,6 +407,40 @@ void get_clpam(void*index, clpam* cindex){
     cindex->global_intercept=clhash->global_intercept;
 }
 
+
+void test_pthash_build(LVA* lvas, size_t n){
+    pthash::build_configuration config;
+    config.c = 3.0;
+    config.alpha = 0.99f;
+    config.minimal_output = true;
+    config.verbose_output = false;
+    config.seed = 0x123456789;
+    config.num_threads = 1;
+    config.dynamic_alpha = false;
+
+    size_t in=100;
+    while(true){
+        
+        if(in>n){
+            break;
+        }
+        // collect time used to build
+        struct timespec s, e;
+        clock_gettime(CLOCK_REALTIME, &s);
+        compact_pthash pthash;
+
+        auto ret = pthash.build_in_internal_memory(std::make_move_iterator(lvas), in, config);
+        
+        clock_gettime(CLOCK_REALTIME, &e);
+        unsigned long long used_ns=(e.tv_sec-s.tv_sec)*1000000000+(e.tv_nsec-s.tv_nsec);
+        size_t table_size=pthash.table_size();
+
+        printf("in_number: %lld, used time: %f us, table_size: %lld\n", in,(double)used_ns/1000, table_size);
+
+
+        in*=2;
+    }
+}
 
 size_t rebuild_pthash(void* index, LVA2PA* lva2pas, size_t num, int data_table_idx){
     clhash_v5 *clhash = (clhash_v5 *)index;
